@@ -60,7 +60,7 @@ def decode_output(buf):
 
     # 
     if cmdid == "\xaa\xdd":
-        "timing data transmit"
+        "timing data"
 
         timing_data = Struct(
             "timing data",
@@ -82,7 +82,7 @@ def decode_output(buf):
         ret = timing_data.parse(buf)
 
     elif cmdid == "\xbb\x88":
-        "IIC_MEM_99 data transmitting"
+        "IIC_MEM_99 data"
 
         tx_data = Struct(
             "tx data",
@@ -103,9 +103,25 @@ def decode_output(buf):
         ret = tx_data.parse(buf)
 
     elif cmdid == "\xaa\xcc":
-        "data_logger data transmitting"
+        "data_logger data"
 
-        ret = "Not implemented, yet"
+        logger_data = Struct(
+            "tx data",
+            Magic("\xaa\xcc"),
+            UBInt8('foo'),
+            UBInt8('year'),
+            UBInt8('week'),
+            UBInt8('month'),
+            UBInt8('day'),
+            UBInt8('hour'),
+            UBInt8('minute'),
+            UBInt8('second'),
+            UBInt8('data_h'),
+            UBInt8('data_l'),
+            UBInt8('stat0'),
+            UBInt8('stat1'),
+            )
+        ret = logger_data.parse(buf)
     
 
     # XXX implement other data structures
@@ -123,10 +139,10 @@ cmd = {
             'ret' : False,		# will data be returned?
             'desc': "Switch units between lux and foot candle (fc)"	# description
             },
-        'load' : { 
+        'light' : { 
             'cmd' : "\xfd", 
             'ret' : False,
-            'desc': "load/light button"
+            'desc': "Toggle backlight"
             },
         'memsetup' : { 
             'cmd' : "\xfb", 
@@ -136,22 +152,22 @@ cmd = {
         'peak' : { 
             'cmd' : "\xf7", 
             'ret' : False,
-            'desc': ""
+            'desc': "Toggle peak value display"
             },
         'rel' : { 
             'cmd' : "\xdf", 
             'ret' : False,
-            'desc': ""
+            'desc': "Toggle realtive reading"
             },
         'hold' : { 
             'cmd' : "\xef", 
             'ret' : False,
-            'desc': ""
+            'desc': "Toggle value hold"
             },
         'max' : { 
             'cmd' : "\xbf", 
             'ret' : False,
-            'desc': ""
+            'desc': "Toggle Min/Max/current value discplay "
             },
         'DLholdmem' : { 
             'cmd' : "\xdc", 
@@ -169,40 +185,40 @@ cmd = {
             'desc': ""
             },
         'peakhold' : { 
-                'cmd' : "\xda", 
-                'ret' : False,
-                'desc': ""
-                },
+            'cmd' : "\xda", 
+            'ret' : False,
+            'desc': ""
+            },
         'range' : { 
-                'cmd' : "\x7f", 
-                'ret' : False,
-                'desc': ""
-                },
+            'cmd' : "\x7f", 
+            'ret' : False,
+            'desc': "Cycle through measurement ranges"
+            },
         'off' : { 
-                'cmd' : "\xf3", 
-                'ret' : False,
-                'desc': ""
-                },
+            'cmd' : "\xf3", 
+            'ret' : False,
+            'desc': "Turn of the instrument"
+            },
         'get_timing' : { 
-                'cmd' : "\x11", 
-                'ret' : True,
-                'desc': "Timing data transmit"
-                },
+            'cmd' : "\x11", 
+            'ret' : True,
+            'desc': "Timing data transmit"
+            },
         'get_stored_data' : { 
-                'cmd' : "\x12", 
-                'ret' : True,
-                'desc': "read stored data"
-                },
+            'cmd' : "\x12", 
+            'ret' : True,
+            'desc': "read stored data"
+            },
         'get_logger_data' : { 
-                'cmd' : "\x13", 
-                'ret' : True,
-                'desc': "read logger data"
-                },
+            'cmd' : "\x13", 
+            'ret' : True,
+            'desc': "read logger data"
+            },
         'get_data_protocol' : { 
-                'cmd' : "\x14", 
-                'ret' : True,
-                'desc': "data logger data transmit protocol"
-                }
+            'cmd' : "\x14", 
+            'ret' : True,
+            'desc': "data logger data transmit protocol"
+            }
         }
 
 
