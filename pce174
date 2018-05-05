@@ -1,0 +1,176 @@
+#!/usr/bin/env python
+"""pce174 - a little tool to communicate with a PCE-174 lightmeter/logger
+
+The PCE-174 appears to be identical to the Extech HD450 light meter 
+but as I don't own the latter I have no way to test this
+"""
+
+# todo
+#	- implement output decoding -> csv
+#	- understand all reading functions
+#	- switch to better format for structs
+#	- write decoder for status information
+#	- implement logging interval setting
+#	- add option to list all valid commands
+#	- test all commands!
+#	- implement interface detection?
+#	- make default device/interface OS dependent
+
+import sys, argparse
+import serial
+#from construct import *
+
+
+def main():
+	# get commandline arguments
+	parser = argparse.ArgumentParser(description="talk to a PCE-174 lightmeter/logger")
+	parser.add_argument('command', type=str, help="command to send to instrument")
+	parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to")
+	parser.add_argument('-b', dest="baud", type=int, default=9600, help="baudrate")
+	parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv','raw','repr'], help="return data in raw format")
+	args = parser.parse_args()
+	
+	if args.command in cmd:
+		iface = serial.Serial(args.interface, args.baud, timeout=2)
+		hello = "\x87\x83"	# command prefix
+		iface.write(hello + cmd[args.command]['cmd'])
+		if cmd[args.command]['ret']: # read data
+			buf = iface.read(100000)
+			if args.format == "raw":
+				print buf,
+			elif args.format == "repr":
+				print repr(buf),
+			elif args.format == "csv":
+				print decode_output(buf),
+		iface.close()
+	else:
+		print "unknown command:", args.command
+		parser.print_usage()
+
+
+
+def decode_output(buf):
+	"return decoded data"
+
+	cmdid = buf[:2]
+        if cmdid == "\xaa\xdd":
+		ret = Struct(
+			"timing data",
+			Magic("\xaa\xdd"),
+			UBInt8('foo'),
+			UBInt8('year'),
+			UBInt8('week'),
+			UBInt8('month'),
+			UBInt8('day'),
+			UBInt8('hour'),
+			UBInt8('minute'),
+			UBInt8('second'),
+			BFloat32('value'), # XXX stimmt das?
+			UBInt8('stat0'),
+			UBInt8('stat1'),
+			UBInt8('mem_no'),
+			UBInt8('read_no')
+		)
+
+	return(ret)
+
+
+
+
+# command definition
+cmd = {
+	'units' : { 
+		'cmd' : "\xfe",		# command byte
+		'ret' : False,		# will data be returned?
+		'desc': "Switch units between lux and foot candle (fc)"	# description
+		},
+	'load' : { 
+		'cmd' : "\xfd", 
+		'ret' : False,
+		'desc': "load/light button"
+		},
+	'memsetup' : { 
+		'cmd' : "\xfb", 
+		'ret' : False,
+		'desc': ""
+		},
+	'peak' : { 
+		'cmd' : "\xf7", 
+		'ret' : False,
+		'desc': ""
+		},
+	'rel' : { 
+		'cmd' : "\xdf", 
+		'ret' : False,
+		'desc': ""
+		},
+	'hold' : { 
+		'cmd' : "\xef", 
+		'ret' : False,
+		'desc': ""
+		},
+	'max' : { 
+		'cmd' : "\xbf", 
+		'ret' : False,
+		'desc': ""
+		},
+	'DLholdmem' : { 
+		'cmd' : "\xdc", 
+		'ret' : False,
+		'desc': ""
+		},
+	'relhold' : { 
+		'cmd' : "\xdb", 
+		'ret' : False,
+		'desc': ""
+		},
+	'backlight' : { 
+		'cmd' : "\xde", 
+		'ret' : False,
+		'desc': ""
+		},
+	'peakhold' : { 
+		'cmd' : "\xda", 
+		'ret' : False,
+		'desc': ""
+		},
+	'range' : { 
+		'cmd' : "\x7f", 
+		'ret' : False,
+		'desc': ""
+		},
+	'off' : { 
+		'cmd' : "\xf3", 
+		'ret' : False,
+		'desc': ""
+		},
+	'get_timing' : { 
+		'cmd' : "\x11", 
+		'ret' : True,
+		'desc': "Timing data transmit"
+		},
+	'get_stored_data' : { 
+		'cmd' : "\x12", 
+		'ret' : True,
+		'desc': "read stored data"
+		},
+	'get_logger_data' : { 
+		'cmd' : "\x13", 
+		'ret' : True,
+		'desc': "read logger data"
+		},
+	'get_data_protocol' : { 
+		'cmd' : "\x14", 
+		'ret' : True,
+		'desc': "data logger data transmit protocol"
+		}
+}
+
+
+if __name__ == "__main__":
+	try:
+		main()
+	except KeyboardInterrupt:
+		pass
+
+# EOF
