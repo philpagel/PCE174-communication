@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 """pce174 - a little tool to communicate with a PCE-174 lightmeter/logger
-
-The PCE-174 appears to be identical to the Extech HD450 light meter 
-but as I don't own the latter I have no way to test this
 """
 
 # todo
@@ -26,9 +23,9 @@ def main():
     # get commandline arguments
     parser = argparse.ArgumentParser(description="talk to a PCE-174 lightmeter/logger")
     parser.add_argument('command', type=str, help="command to send to instrument")
-    parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to")
-    parser.add_argument('-b', dest="baud", type=int, default=9600, help="baudrate")
-    parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv','raw','repr'], help="return data in raw format")
+    parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to (/dev/ttyUSB0)")
+    parser.add_argument('-b', dest="baud", type=int, default=9600, help="baudrate (9600)")
+    parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv','raw','repr'], help="return data in the specified format (csv)")
     args = parser.parse_args()
 
     if args.command in cmd:
@@ -139,15 +136,15 @@ cmd = {
             'ret' : False,		# will data be returned?
             'desc': "Switch units between lux and foot candle (fc)"	# description
             },
-        'light' : { 
+        'load' : { 
             'cmd' : "\xfd", 
             'ret' : False,
-            'desc': "Toggle backlight"
+            'desc': "Load"
             },
-        'memsetup' : { 
+        'save' : { 
             'cmd' : "\xfb", 
             'ret' : False,
-            'desc': ""
+            'desc': "Mem/setup"
             },
         'peak' : { 
             'cmd' : "\xf7", 
@@ -172,14 +169,14 @@ cmd = {
         'DLholdmem' : { 
             'cmd' : "\xdc", 
             'ret' : False,
-            'desc': ""
+            'desc': "Data logger hold MEM"
             },
         'relhold' : { 
             'cmd' : "\xdb", 
             'ret' : False,
             'desc': ""
             },
-        'backlight' : { 
+        'viewdata' : { 
             'cmd' : "\xde", 
             'ret' : False,
             'desc': ""
