@@ -38,14 +38,14 @@ To communicate with the light meter connect through USB and run the command lie 
 
     pce174 [-h] [-i INTERFACE] [-b BAUD] [-f {csv,raw,repr}] command
 
-positional arguments:
-  command            command to send to instrument
+    positional arguments:
+      command            command to send to instrument
 
-optional arguments:
-  -h, --help         show this help message and exit
-  -i INTERFACE       interface to connect to
-  -b BAUD            baudrate
-  -f {csv,raw,repr}  return data in the specified format
+    optional arguments:
+      -h, --help         show this help message and exit
+      -i INTERFACE       interface to connect to
+      -b BAUD            baudrate
+      -f {csv,raw,repr}  return data in the specified format
 
 Typically you can stick to the defaults, maybe with the exception of the
 interface specification (in case /dev/ttyUSB0 is not what you need).
@@ -72,33 +72,33 @@ After that, send a single code byte to run the desired command.  For the most
 part, the commands directly correspond to key presses on the instrument (see
 manual for details):
                             
-Code    Command         Key                 Description
--------------------------------------------------------------------------------
-0xFE    units           UNITS key           Toggle units (fc/lux)
-0xFD    load            LIGHT/LOAD key      Toggle backlight
-0xFB    save            REC/SETUP           Save reading
-0XF7    peak            PEAK/LEFT           Toggle peak mode
-0xDF    rel             REL/RIGHT           Toggle rel mode
-0xEF    hold            HOLD/DOWN           Toggle hold mode
-0xBF    max             MAX/MIN/UP          Toggle min/max/continuous mode
-0XDC    datalogger      REC/SETUP (hold)    ?
-0xDB    REL hold rel    REL/RIGHT (hold)    ?
-0xDE                    LIGHT/LOAD (hold)   Toggle: view saved data
-0xDA                    PEAK/LEFT (hold)    ?
-0x7F    range           RANGE/APO           Toggle measurement ranges
-0xF3    off             POWER               Power off
+Code  |  Command       |  Key               |  Description
+------|----------------|--------------------|-------------------------------------
+0xFE  |  units         |  UNITS key         |  Toggle units (fc/lux)
+0xFD  |  load          |  LIGHT/LOAD key    |  Toggle backlight
+0xFB  |  save          |  REC/SETUP         |  Save reading
+0XF7  |  peak          |  PEAK/LEFT         |  Toggle peak mode
+0xDF  |  rel           |  REL/RIGHT         |  Toggle rel mode
+0xEF  |  hold          |  HOLD/DOWN         |  Toggle hold mode
+0xBF  |  max           |  MAX/MIN/UP        |  Toggle min/max/continuous mode
+0XDC  |  datalogger    |  REC/SETUP (hold)  |  ?
+0xDB  |  REL hold rel  |  REL/RIGHT (hold)  |  ?
+0xDE  |                |  LIGHT/LOAD (hold) |  Toggle: view saved data
+0xDA  |                |  PEAK/LEFT (hold)  |  ?
+0x7F  |  range         |  RANGE/APO         |  Toggle measurement ranges
+0xF3  |  off           |  POWER             |  Power off
 
 
 Commands that request data from the instrument cannot be triggered by button
 presses:
 
 
-Code    Command             Description
-------------------------------------------------------------------------------
-0x11    get-timing          ?
-0x12    get-stored-data     Read manually stored data registers
-0x13    get-logger-data     Read logger data
-0x14    get-data-protocol   ?
+Code  |  Command           |  Description
+------|--------------------|--------------------------------------------------
+0x11  |  get-timing        |  ?
+0x12  |  get-stored-data   |  Read manually stored data registers
+0x13  |  get-logger-data   |  Read logger data
+0x14  |  get-data-protocol |  ?
 
 
 ## Detailed description of received data
