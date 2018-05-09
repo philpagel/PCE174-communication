@@ -8,7 +8,8 @@ but as I don't own the latter I have no way to test this.
 
 Currently, the script can send all control commands and request data from the
 instrument. However, parsing and decoding of the data received is still work in
-progress and considered non-functional.
+progress and considered non-functional. I also don't fully understand all
+commands, yet so they may have confusing names and/or descriptions.
 
 ## Connecting to a computer
 
@@ -19,22 +20,22 @@ On my Debian Linux system, it is recognized out of the box; under Windows you
 may need to install the respective driver (from the interweb or the Windows
 software CD that comes with the instrument). Mac anyone?
 
-Serial communication parameters:
+Serial communication parameters are 9600bps8N1. Or more verbose:
 
 parameter | value
 ----------|---------
 baudrate  | 9600
-bytesize  | 8
+byte size | 8
 parity    | None
-stopbits  | 1
+stop bits | 1
 timeout   | None
-xonxoff   | False
-rtscts    | False
+xon/xoff  | False
+rts/cts   | False
 
 
 ## Usage
 
-To communicate with the light meter connect through USB and run the command lie this:
+To communicate with the light meter connect through USB and run the command like this:
 
     pce174 [-h] [-i INTERFACE] [-b BAUD] [-f {csv,raw,repr}] command
 
@@ -72,26 +73,25 @@ After that, send a single code byte to run the desired command.  For the most
 part, the commands directly correspond to key presses on the instrument (see
 manual for details):
                             
-Code | Command      |  Key               | Description
------|--------------|--------------------|------------------------------------
-0xfe | units        |  UNITS key         | Toggle units (fc/lux)
-0xfd | load         |  LIGHT/LOAD key    | Toggle backlight
-0xfb | save         |  REC/SETUP         | Save reading
-0Xf7 | peak         |  PEAK/LEFT         | Toggle peak mode
-0xdf | rel          |  REL/RIGHT         | Toggle rel mode
-0xef | hold         |  HOLD/DOWN         | Toggle hold mode
-0xbf | max          |  MAX/MIN/UP        | Toggle min/max/continuous mode
-0Xdc | datalogger   |  REC/SETUP (hold)  | ?
-0xdb | REL hold rel |  REL/RIGHT (hold)  | ?
-0xde |              |  LIGHT/LOAD (hold) | ?
-0xda |              |  PEAK/LEFT (hold)  | ?
-0x7f | range        |  RANGE/APO         | Toggle measurement ranges
-0xf3 | off          |  POWER             | Power off
+Code | Command   |  Key               | Description
+-----|-----------|--------------------|------------------------------------
+0xfe | units     |  UNITS key         | Toggle units (fc/lux)
+0x7f | range     |  RANGE/APO         | Toggle measurement ranges
+0xfd | light     |  LIGHT/LOAD key    | Toggle backlight
+0xf7 | peak      |  PEAK/LEFT         | Toggle peak min/max mode
+0xdf | rel       |  REL/RIGHT         | Toggle rel mode
+0xef | hold      |  HOLD/DOWN         | Toggle hold mode
+0xbf | minmax    |  MAX/MIN/UP        | Toggle min/max/continuous mode
+0xfb | save      |  REC/SETUP         | Save reading
+0xf3 | off       |  POWER             | Power off
+0xdc | logger    |  REC/SETUP (hold)  | ?
+0xdb | relhold   |  REL/RIGHT (hold)  | ?
+0xde | lighthold |  LIGHT/LOAD (hold) | ?
+0xda | peakhold  |  PEAK/LEFT (hold)  | ?
 
 
 Commands that request data from the instrument cannot be triggered by button
 presses:
-
 
 Code | Command           | Description
 -----|-------------------|-------------------------------------------------
@@ -100,9 +100,21 @@ Code | Command           | Description
 0x13 | get-logger-data   | Read logger data
 0x14 | get-data-protocol | ?
 
+After receiving one of these commands, the instrument returns a binary blob
+that requires decoding. The structure of these blobs is described in the next
+section.
 
-## Detailed description of received data
+
+## Detailed description of received data blobs
 
 XXX - to be written
+
+### Timing data
+
+### (Manually) stored data
+
+### Logger data
+
+### Protocol transmission data
 
 

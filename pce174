@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """pce174 - a little tool to communicate with a PCE-174 lightmeter/logger
 """
 
@@ -17,7 +17,7 @@
 import sys, argparse
 import serial
 from construct import *
-
+import struct
 
 def main():
     # get commandline arguments
@@ -25,24 +25,27 @@ def main():
     parser.add_argument('command', type=str, help="command to send to instrument")
     parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to (/dev/ttyUSB0)")
     parser.add_argument('-b', dest="baud", type=int, default=9600, help="baudrate (9600)")
-    parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv','raw','repr'], help="return data in the specified format (csv)")
+    parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv','raw','hex','repr'], help="return data in the specified format (csv)")
     args = parser.parse_args()
 
     if args.command in cmd:
         iface = serial.Serial(args.interface, args.baud, timeout=2)
-        hello = "\x87\x83"	# command prefix
-        iface.write(hello + cmd[args.command]['cmd'])
+        hello = b"\x87\x83"	# command prefix
+        msg = hello + cmd[args.command]['cmd']
+        iface.write(msg)
         if cmd[args.command]['ret']: # read data
             buf = iface.read(100000)
             if args.format == "raw":
-                print buf,
+                print(buf),
             elif args.format == "repr":
-                print repr(buf),
+                print(repr(buf)),
+            elif args.format == "hex":
+                print(buf.encode('hex')),
             elif args.format == "csv":
-                print decode_output(buf),
+                print(decode_output(buf)),
         iface.close()
     else:
-        print "unknown command:", args.command
+        print("unknown command:", args.command)
         parser.print_usage()
 
 
@@ -54,14 +57,13 @@ def decode_output(buf):
 
     ret = None
     cmdid = buf[:2]
+    buf = buf[2:]
 
-    # 
-    if cmdid == "\xaa\xdd":
+    if cmdid == b"\xaa\xdd":
         "timing data"
 
         timing_data = Struct(
             "timing data",
-            Magic("\xaa\xdd"),
             UBInt8('foo'),
             UBInt8('year'),
             UBInt8('week'),
@@ -78,12 +80,11 @@ def decode_output(buf):
             )
         ret = timing_data.parse(buf)
 
-    elif cmdid == "\xbb\x88":
+    elif cmdid == b"\xbb\x88":
         "IIC_MEM_99 data"
 
         tx_data = Struct(
             "tx data",
-            Magic("\xbb\x88"),
             UBInt8('foo'),
             UBInt8('year'),
             UBInt8('week'),
@@ -92,19 +93,18 @@ def decode_output(buf):
             UBInt8('hour'),
             UBInt8('minute'),
             UBInt8('second'),
-            UBInt8('data_h'),
-            UBInt8('data_l'),
+            SBInt16('value'),
             UBInt8('stat0'),
             UBInt8('stat1'),
             )
+
         ret = tx_data.parse(buf)
 
-    elif cmdid == "\xaa\xcc":
+    elif cmdid == b"\xaa\xcc":
         "data_logger data"
 
         logger_data = Struct(
             "tx data",
-            Magic("\xaa\xcc"),
             UBInt8('foo'),
             UBInt8('year'),
             UBInt8('week'),
@@ -132,87 +132,87 @@ def decode_output(buf):
 # command definition
 cmd = {
         'units' : { 
-            'cmd' : "\xfe",		# command byte
+            'cmd' : b"\xfe",		# command byte
             'ret' : False,		# will data be returned?
-            'desc': "Switch units between lux and foot candle (fc)"	# description
+            'desc': "Toggle units between lux and foot candle (fc)"	# description
             },
-        'load' : { 
-            'cmd' : "\xfd", 
+        'light' : { 
+            'cmd' : b"\xfd", 
             'ret' : False,
-            'desc': "Load"
+            'desc': "Toggle backlight"
             },
         'save' : { 
-            'cmd' : "\xfb", 
+            'cmd' : b"\xfb", 
             'ret' : False,
             'desc': "Mem/setup"
             },
         'peak' : { 
-            'cmd' : "\xf7", 
+            'cmd' : b"\xf7", 
             'ret' : False,
             'desc': "Toggle peak value display"
             },
         'rel' : { 
-            'cmd' : "\xdf", 
+            'cmd' : b"\xdf", 
             'ret' : False,
             'desc': "Toggle realtive reading"
             },
         'hold' : { 
-            'cmd' : "\xef", 
+            'cmd' : b"\xef", 
             'ret' : False,
             'desc': "Toggle value hold"
             },
-        'max' : { 
-            'cmd' : "\xbf", 
+        'minmax' : { 
+            'cmd' : b"\xbf", 
             'ret' : False,
             'desc': "Toggle Min/Max/current value discplay "
             },
-        'DLholdmem' : { 
-            'cmd' : "\xdc", 
+        'logger' : { 
+            'cmd' : b"\xdc", 
             'ret' : False,
-            'desc': "Data logger hold MEM"
+            'desc': "??? Data logger hold REC"
             },
         'relhold' : { 
-            'cmd' : "\xdb", 
+            'cmd' : b"\xdb", 
             'ret' : False,
             'desc': ""
             },
-        'viewdata' : { 
-            'cmd' : "\xde", 
+        'lighthold' : { 
+            'cmd' : b"\xde", 
             'ret' : False,
-            'desc': ""
+            'desc': "???"
             },
         'peakhold' : { 
-            'cmd' : "\xda", 
+            'cmd' : b"\xda", 
             'ret' : False,
-            'desc': ""
+            'desc': "???"
             },
         'range' : { 
-            'cmd' : "\x7f", 
+            'cmd' : b"\x7f", 
             'ret' : False,
             'desc': "Cycle through measurement ranges"
             },
         'off' : { 
-            'cmd' : "\xf3", 
+            'cmd' : b"\xf3", 
             'ret' : False,
             'desc': "Turn of the instrument"
             },
-        'get_timing' : { 
-            'cmd' : "\x11", 
+        'get-timing' : { 
+            'cmd' : b"\x11", 
             'ret' : True,
             'desc': "Timing data transmit"
             },
-        'get_stored_data' : { 
-            'cmd' : "\x12", 
+        'get-stored-data' : { 
+            'cmd' : b"\x12", 
             'ret' : True,
             'desc': "read stored data"
             },
-        'get_logger_data' : { 
-            'cmd' : "\x13", 
+        'get-logger-data' : { 
+            'cmd' : b"\x13", 
             'ret' : True,
             'desc': "read logger data"
             },
-        'get_data_protocol' : { 
-            'cmd' : "\x14", 
+        'get-data-protocol' : { 
+            'cmd' : b"\x14", 
             'ret' : True,
             'desc': "data logger data transmit protocol"
             }
