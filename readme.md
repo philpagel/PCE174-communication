@@ -3,10 +3,12 @@
 This script implements the serial communication protocol used by the PCE-174
 logging light meter.
 
-The PCE-174 appears to be identical to the Extech HD450 light meter 
-but as I don't own the latter I have no way to test this.
+The PCE-174 appears to be identical to the Extech HD450 light meter but as I
+don't own the latter I have no way to test this.  The user manual for the
+Extech version of the instrument is quite a bit better than the PCE version, so
+try and find it online...
 
-Currently, the script can send all control commands and request data from the
+Currently, the script can send control commands and request data from the
 instrument. However, parsing and decoding of the data received is still work in
 progress and considered non-functional. I also don't fully understand all
 commands, yet so they may have confusing names and/or descriptions.
@@ -38,23 +40,23 @@ rts/cts   | False
 To communicate with the light meter connect through USB and run the command
 like this:
 
-    usage: pce174 [-h] [-i INTERFACE] [-b BAUD] [-f {csv,raw,hex}] command
+    usage: pce174 [-h] [-l] [-i INTERFACE] [-b BAUD] [-f {csv,raw,hex}] [command]
 
-    talk to a PCE-174 lightmeter/logger
+    Talk to a PCE-174 lightmeter/logger
 
     positional arguments:
       command           command to send to instrument
 
     optional arguments:
       -h, --help        show this help message and exit
+      -l, --list        List all available commands
       -i INTERFACE      interface to connect to (/dev/ttyUSB0)
       -b BAUD           baudrate (9600)
       -f {csv,raw,hex}  return data in the specified format (csv)
 
-
 Typically you can stick to the defaults, maybe with the exception of the
-interface specification (in case /dev/ttyUSB0 is not what you need).
-
+interface specification (in case /dev/ttyUSB0 is not what you need, certainly
+under Windows).
 
 
 # Protocol description
@@ -79,7 +81,7 @@ manual for details):
                             
 Code | Command   |  Key               | Description
 -----|-----------|--------------------|------------------------------------
-0xfe | units     |  UNITS key         | Toggle units (fc/lux)
+0xfe | units     |  UNITS key         | Toggle units (lux/fc)
 0x7f | range     |  RANGE/APO         | Toggle measurement ranges
 0xfd | light     |  LIGHT/LOAD key    | Toggle backlight
 0xf7 | peak      |  PEAK/LEFT         | Toggle peak min/max mode
@@ -131,20 +133,20 @@ Record format:
 
 Pos | Bytes | Content  | Type  | Comment
 ----|-------|----------|-------|----------------------
-0   |    1  | 0x00     | –     | reserved
-1   |    1  | year     | BCD   | date: year, 2 digits
-2   |    1  | week     | BCD   | date: week
-3   |    1  | month    | BCD   | date: month
-4   |    1  | day      | BCD   | date: day
-5   |    1  | hour     | BCD   | time: hours
-6   |    1  | minute   | BCD   | time: minutes
-7   |    1  | second   | BCD   | time: seconds
-8   |    2  | value    | ?     | Measured value real?
-10  |    2  | value    | ?     | Measured value data?
-12  |    1  | stat0    | bin   | Status byte 0        
-13  |    1  | stat1    | bin   | Status byte 1
-14  |    1  | mem no   |       | ?
-15  |    1  | read no  |       | ?
+0   | 1     | 0x00     | –     | reserved
+1   | 1     | year     | BCD   | date: year, 2 digits
+2   | 1     | weekday  | BCD   | date: weekday [1, 7]
+3   | 1     | month    | BCD   | date: month
+4   | 1     | day      | BCD   | date: day
+5   | 1     | hour     | BCD   | time: hours
+6   | 1     | minute   | BCD   | time: minutes
+7   | 1     | second   | BCD   | time: seconds
+8   | 2     | value    | ?     | Measured value real?
+10  | 2     | value    | ?     | Measured value data?
+12  | 1     | stat0    | bin   | Status byte 0        
+13  | 1     | stat1    | bin   | Status byte 1
+14  | 1     | mem no   |       | ?
+15  | 1     | read no  |       | ?
 
 
 ### Manually stored data
@@ -155,7 +157,7 @@ Magic number: 0xbb88 (2 bytes)
 
 99 data records of 13 bytes, each.
 
-Total blob length = 99*13 + 2 = 1289bytes.
+Total blob length = 99x13 + 2 = 1289bytes.
 
 However, the instrument returns more bytes than that (1352 in my case).
 The 63 extra bytes are all 0x00.
@@ -166,16 +168,24 @@ Pos | Bytes |  Content  | Type  | Comment
 ----|-------|-----------|-------|----------------------
 0   | 1     |  0x00     | –     | reserved
 1   | 1     |  year     | BCD   | date: year, 2 digits
-2   | 1     |  week     | BCD   | date: week
+2   | 1     |  weekday  | BCD   | date: weekday [1,7]
 3   | 1     |  month    | BCD   | date: month
 4   | 1     |  day      | BCD   | date: day
-5   | 1     |  hour     | BCD   | time: hours
-6   | 1     |  minute   | BCD   | time: minutes
-7   | 1     |  second   | BCD   | time: seconds
-8   | 2     |  value    | ?     | Measured value
-10  | 1     |  stat0    | bin   | Status byte 0        
-11  | 1     |  stat1    | bin   | Status byte 1
-12  | 1     |  0x01     |       | reserved/undocumented/separator?
+5   | 1     |  hour     | BCD   | time: hour
+6   | 1     |  minute   | BCD   | time: minute
+7   | 1     |  second   | BCD   | time: second
+8   | 1     |  pos      | Uchar | storage position [1,99]
+9   | 1     |  datH     | Uchar | Measured value: high byte
+10  | 1     |  datL     | Uchar | Measured value: low byte
+11  | 1     |  stat0    | bin   | Status byte 0        
+12  | 1     |  stat1    | bin   | Status byte 1
+
+
+The data value uses a funny variety of BCD on byte level:
+
+    value = (100 x datH + datL) * Flevel
+
+XXX The level factor is not implemented, yet. 
 
 
 ### Logger data
@@ -205,16 +215,16 @@ Record format:
 
 Pos | Bytes |  Content  | Type  | Comment
 ----|-------|-----------|-------|----------------------
-0   | 1     |  group    | UInt8 | 
-1   | 1     |  sampling | UInt8 | 
-2   | 1     |  0x00     | UInt8 | reserved
-3   | 1     |  year     | UInt8 | 
-4   | 1     |  week     | UInt8 | docs said "Mon-day"???
-5   | 1     |  month    | UInt8 | docs said "yue" which means "moon/month"
-6   | 1     |  day      | UInt8 | 
-7   | 1     |  hour     | UInt8 | 
-8   | 1     |  minute   | UInt8 | 
-9   | 1     |  second   | UInt8 | 
+0   | 1     |  group    | BCD   | 
+1   | 1     |  sampling | BCD   | sampling rate [s] 
+2   | 1     |  0x00     | –     | reserved
+3   | 1     |  year     | BCD   | date: year 
+4   | 1     |  weekday  | BCD   | date: weekday [1,7]
+5   | 1     |  month    | BCD   | date: month
+6   | 1     |  day      | BCD   | date: day
+7   | 1     |  hour     | BCD   | time: hour
+8   | 1     |  minute   | BCD   | time: minute
+9   | 1     |  second   | BCD   | time: second
 10  | 3     |  Data1    | data  | 1. data record
 13  | 3     |  Data2    | data  | 2. data record
 16  | 3     |  ...      | data  | ...
@@ -224,14 +234,15 @@ Data record format:
 
 Pos | Bytes |  Content  | Type  | Comment
 ----|-------|-----------|-------|----------------------
-0   | 2     |  Value    | BCD?  | Measures value
-2   | 1     |  Status   | UInt8 | Stat0 byte
+0   | 2     |  Value    | BCD?  | Measured value
+2   | 1     |  Stat0    | bin   | Stat0 byte
 
 
 ## Status bytes
 
-Some data records contain two status bytes that indicate the settings
+Some data records contain status bytes that indicate the settings
 associated with a measurement as bit fields.
+
 
 ### Stat0 
 
@@ -255,7 +266,7 @@ Bits  | Meaning   | Values
 8,7,6 | reserved  |
 5     | low power | 0:off, 1:on
 4     | signed    | 0:false, 1:true 
-3,2   |     ?     | 00:time, 01:day, 10:sampling-rate, 11:year
+3,2   | ?         | 00:time, 01:day, 10:sampling-rate, 11:year
 1,0   | ?         | 01:MEM, 10:LOAD
 
 

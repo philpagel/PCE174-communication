@@ -4,19 +4,22 @@ pce174 - a little tool to communicate with a PCE-174 lightmeter/logger
 """
 
 # todo
-#   - understand/decode value in stored-data record
-#   - write decoder for status information
+#   - understand/decode value in stored-data record: honor range correction
+#   - find out how to handle signed/unsigned measurements
+#   - write decoder for status information (stat0, stat1)
 #   - implement get-logger-data
 #   - implement get-timing
 #   - implement logging interval setting
 #   - test all commands!
 
+
 import sys, argparse
 import serial
 import binascii
 
-# tested with construct 2.5.5. The current versions (≥ 2.8 semm to be incompatible!)
+# requires construct ≥ 2.8 (tested with 2.9)
 from construct import * 
+
 
 def main():
     "The main function - duh."
@@ -28,7 +31,10 @@ def main():
         for key, value in cmd.items():
             print("\t", key)
     elif args.command in cmd:
-        iface = serial.Serial(args.interface, args.baud, timeout=5)
+        try:
+            iface = serial.Serial(args.interface, args.baud, timeout=5)
+        except:
+            sys.exit("Unable to connect to device.") 
         hello = b"\x87\x83"	# command prefix
         msg = hello + cmd[args.command]['cmd']
         iface.write(msg)
@@ -59,10 +65,19 @@ def getargs():
     return(parser.parse_args())
 
 
-def bcd2int(byte):
-    "Return the decimal value of a BCD encoded byte"
-    
-    return(10 * (byte >> 4) + (byte & 0x0f))
+def bcd2int(dat):
+    "Return the decimal value of a BCD encoded int"
+
+    ret = 0
+    f = 1
+    while dat != 0:
+        val = dat & 0x0f
+        if val > 9:
+            sys.exit("Illegal tetrade encountered in BCD conversion.")
+        ret += f * val
+        f *= 10
+        dat = dat >> 4
+    return(ret)
 
 
 def decode_blob(blob):
@@ -114,31 +129,30 @@ def decode_stored_data(blob):
         'hour'      / Int8ub,
         'minute'    / Int8ub,
         'second'    / Int8ub,
-        'value'     / Int16ul,
+        'pos'        / Int8ub,
+        'datH'      / Int8ub,
+        'datL'      / Int8ub,
         'stat0'     / Int8ub,
-        'stat1'     / Int8ub,
-        Padding(1)
+        'stat1'     / Int8ub
         )
 
     #db = GreedyRange(record)
     db = Array(99, record)
     dat = db.parse(blob)
 
-    cols = ('ID', 'date', 'time', 'value', 'stat0', 'stat1')
+    cols = ('pos', 'date', 'time', 'value', 'stat0', 'stat1')
     ret = [", ".join(cols)]
 
-    for i, rec in enumerate(dat):
+    for rec in dat:
         for key in ['year', 'week', 'month', 'day', 'hour', 'minute', 'second']:
             rec[key] = bcd2int(rec[key])
         rec['year'] += 2000
-        rec['value'] = hex(rec['value'])
-
 
         rec = {
-            'ID'   : i+1,
+            'pos'  : rec['pos'],
             'date' : "%4.4i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
             'time' : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
-            'value': rec['value'],
+            'value': 100*rec['datH'] + rec['datL'],
             'stat0': rec['stat0'],
             'stat1': rec['stat1']
             }
@@ -157,6 +171,7 @@ def decode_logger_data(blob):
         UBInt16('buffersize')
         )
     ret = logger_buffer.parse(blob)
+
 
 def decode_timing_data(blob):
     "Decode the timing binary blob to csv"
