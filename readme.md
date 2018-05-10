@@ -35,18 +35,22 @@ rts/cts   | False
 
 ## Usage
 
-To communicate with the light meter connect through USB and run the command like this:
+To communicate with the light meter connect through USB and run the command
+like this:
 
-    pce174 [-h] [-i INTERFACE] [-b BAUD] [-f {csv,raw,repr}] command
+    usage: pce174 [-h] [-i INTERFACE] [-b BAUD] [-f {csv,raw,hex}] command
+
+    talk to a PCE-174 lightmeter/logger
 
     positional arguments:
-      command            command to send to instrument
+      command           command to send to instrument
 
     optional arguments:
-      -h, --help         show this help message and exit
-      -i INTERFACE       interface to connect to
-      -b BAUD            baudrate
-      -f {csv,raw,repr}  return data in the specified format
+      -h, --help        show this help message and exit
+      -i INTERFACE      interface to connect to (/dev/ttyUSB0)
+      -b BAUD           baudrate (9600)
+      -f {csv,raw,hex}  return data in the specified format (csv)
+
 
 Typically you can stick to the defaults, maybe with the exception of the
 interface specification (in case /dev/ttyUSB0 is not what you need).
@@ -107,14 +111,12 @@ section.
 
 ## Detailed description of received data blobs
 
-XXX - to be written
-
 Data blobs always start with a 2 byte magic number that indicates
 the type of blob. The actual data follows immediately after that. 
 
 Most numerical data is encoded as binary coded decimal (BCD), i.e bytes are
 interpreted as two separate 4 bit nibbles which encode decimal digits (0-9),
-separately. Values larger than 8 bit are stored in little-endian format
+separately. Values larger than 1 byte are stored in little-endian format.
 
 
 ### Timing data
@@ -127,46 +129,53 @@ XXX data records of 16 bytes, each.
 
 Record format:
 
-Bytes |  Content  | Type  | Comment
-------|-----------|-------|----------------------
-1     |  0x00     | –     | reserved
-1     |  year     | BCD   | date: year, 2 digits
-1     |  week     | BCD   | date: week
-1     |  month    | BCD   | date: month
-1     |  day      | BCD   | date: day
-1     |  hour     | BCD   | time: hours
-1     |  minute   | BCD   | time: minutes
-1     |  second   | BCD   | time: seconds
-2     |  value    | ?     | Measured value
-1     |  stat0    | bin   | Status byte 0        
-1     |  stat1    | bin   | Status byte 1
-1     |  mem no   |       | ?
-1     |  read no  |       | ?
+Pos | Bytes | Content  | Type  | Comment
+----|-------|----------|-------|----------------------
+0   |    1  | 0x00     | –     | reserved
+1   |    1  | year     | BCD   | date: year, 2 digits
+2   |    1  | week     | BCD   | date: week
+3   |    1  | month    | BCD   | date: month
+4   |    1  | day      | BCD   | date: day
+5   |    1  | hour     | BCD   | time: hours
+6   |    1  | minute   | BCD   | time: minutes
+7   |    1  | second   | BCD   | time: seconds
+8   |    2  | value    | ?     | Measured value real?
+10  |    2  | value    | ?     | Measured value data?
+12  |    1  | stat0    | bin   | Status byte 0        
+13  |    1  | stat1    | bin   | Status byte 1
+14  |    1  | mem no   |       | ?
+15  |    1  | read no  |       | ?
 
 
-### (Manually) stored data
+### Manually stored data
 
 Command: get-stored-data (0x12)
 
-Magic number: 0xbb88
+Magic number: 0xbb88 (2 bytes)
 
-XXX data records of 12 bytes, each.
+99 data records of 13 bytes, each.
+
+Total blob length = 99*13 + 2 = 1289bytes.
+
+However, the instrument returns more bytes than that (1352 in my case).
+The 63 extra bytes are all 0x00.
 
 Record format:
 
-bytes |  content  | type  | Comment
-------|-----------|-------|----------------------
-1     |  0x00     | –     | reserved
-1     |  year     | BCD   | date: year, 2 digits
-1     |  week     | BCD   | date: week
-1     |  month    | BCD   | date: month
-1     |  day      | BCD   | date: day
-1     |  hour     | BCD   | time: hours
-1     |  minute   | BCD   | time: minutes
-1     |  second   | BCD   | time: seconds
-2     |  value    | ?     | Measured value
-1     |  stat0    | bin   | Status byte 0        
-1     |  stat1    | bin   | Status byte 1
+Pos | Bytes |  Content  | Type  | Comment
+----|-------|-----------|-------|----------------------
+0   | 1     |  0x00     | –     | reserved
+1   | 1     |  year     | BCD   | date: year, 2 digits
+2   | 1     |  week     | BCD   | date: week
+3   | 1     |  month    | BCD   | date: month
+4   | 1     |  day      | BCD   | date: day
+5   | 1     |  hour     | BCD   | time: hours
+6   | 1     |  minute   | BCD   | time: minutes
+7   | 1     |  second   | BCD   | time: seconds
+8   | 2     |  value    | ?     | Measured value
+10  | 1     |  stat0    | bin   | Status byte 0        
+11  | 1     |  stat1    | bin   | Status byte 1
+12  | 1     |  0x01     |       | reserved/undocumented/separator?
 
 
 ### Logger data
@@ -179,10 +188,10 @@ XXX data records of 3 bytes, each.
 
 Record format:
 
-bytes |  content  | type    | Comment
-------|-----------|---------|----------------------
-1     |  group    | UInt8   | ?
-2     |  bufsize  | ULInt16 | ?
+Pos |Bytes |  Content  | Type    | Comment
+----|------|-----------|---------|----------------------
+0   |1     |  group    | UInt8   | ?
+1   |2     |  bufsize  | ULInt16 | ?
 
 
 
@@ -194,31 +203,29 @@ Magic number: 0xaa56
 
 Record format:
 
-bytes |  content  | type  | Comment
-------|-----------|-------|----------------------
-1     |  group    | UInt8 | 
-1     |  sampling | UInt8 | 
-1     |  0x00     | UInt8 | reserved
-1     |  year     | UInt8 | 
-1     |  Mon-day  | UInt8 | 
-1     |  Yue      | UInt8 | 
-1     |  day      | UInt8 | 
-1     |  hour     | UInt8 | 
-1     |  minute   | UInt8 | 
-1     |  second   | UInt8 | 
-3     |  Data1    | data  | 1. data record
-3     |  Data2    | data  | 2. data record
-3     |  ...      | data  | ...
+Pos | Bytes |  Content  | Type  | Comment
+----|-------|-----------|-------|----------------------
+0   | 1     |  group    | UInt8 | 
+1   | 1     |  sampling | UInt8 | 
+2   | 1     |  0x00     | UInt8 | reserved
+3   | 1     |  year     | UInt8 | 
+4   | 1     |  week     | UInt8 | docs said "Mon-day"???
+5   | 1     |  month    | UInt8 | docs said "yue" which means "moon/month"
+6   | 1     |  day      | UInt8 | 
+7   | 1     |  hour     | UInt8 | 
+8   | 1     |  minute   | UInt8 | 
+9   | 1     |  second   | UInt8 | 
+10  | 3     |  Data1    | data  | 1. data record
+13  | 3     |  Data2    | data  | 2. data record
+16  | 3     |  ...      | data  | ...
 
 
 Data record format:
 
-bytes |  content  | type  | Comment
-------|-----------|-------|----------------------
-2     |  Value    | BCD?  | Measures value
-1     |  Status   | UInt8 | Status0 byte
-
-
+Pos | Bytes |  Content  | Type  | Comment
+----|-------|-----------|-------|----------------------
+0   | 2     |  Value    | BCD?  | Measures value
+2   | 1     |  Status   | UInt8 | Stat0 byte
 
 
 ## Status bytes
@@ -251,6 +258,5 @@ Bits  | Meaning   | Values
 3,2   |     ?     | 00:time, 01:day, 10:sampling-rate, 11:year
 1,0   | ?         | 01:MEM, 10:LOAD
 
-Honestly, I have no idea what most of this means, yet.
 
 
