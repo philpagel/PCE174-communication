@@ -6,17 +6,17 @@ pce174 - a little tool to communicate with a PCE-174 lightmeter/logger
 # todo
 #   - understand/decode value in stored-data record: honor range correction
 #   - find out how to handle signed/unsigned measurements
-#   - write decoder for status information (stat0, stat1)
 #   - implement get-logger-data
 #   - implement get-timing
 #   - implement logging interval setting
+#   - write decoder for status information stat1
+#   - find out how to send simultaneous key presses (if possible)
+#   - find out if we can set date, time and sampling interval through a command
 #   - test all commands!
-
 
 import sys, argparse
 import serial
 import binascii
-
 # requires construct ≥ 2.8 (tested with 2.9)
 from construct import * 
 
@@ -81,8 +81,7 @@ def bcd2int(dat):
 
 
 def decode_blob(blob):
-    """return decoded data
-    """
+    "return decoded data"
 
     ret = None
     cmdid = blob[:2]
@@ -96,20 +95,20 @@ def decode_blob(blob):
         ret = decode_logger_data(blob)
     elif cmdid == b"\xaa\x56":
         logger_data = Struct(
-            "data_logger tx protocol",
-            UBInt8('group'),
-            UBInt8('sampling'),
-            Padding(1),
-            UBInt8('year'),
-            UBInt8('week'),
-            UBInt8('month'),
-            UBInt8('day'),
-            UBInt8('hour'),
-            UBInt8('minute'),
-            UBInt8('second'),
-            ULInt16('value'),
-            UBInt8('stat0')
-            )
+                'group'     / Int8ub('group'),
+                'sampling'  / Int8ub('sampling'),
+                Padding(1),
+                'year'      / Int8ub('year'),
+                'week'      / Int8ub('week'),
+                'month'     / Int8ub('month'),
+                'day'       / Int8ub('day'),
+                'hour'      / Int8ub('hour'),
+                'minute'    / Int8ub('minute'),
+                'second'    / Int8ub('second'),
+                'datH'      / Int8ub('second'),
+                'datL'      / Int8ub('second'),
+                'stat0'     / Int8ub('stat0')
+                )
         ret = logger_data.parse(blob)
     else:
         raise Exception('Unknown command ID in received data')
@@ -121,26 +120,34 @@ def decode_stored_data(blob):
     "Decode the stored_data binary blob to CSV"
 
     record = Struct(
-        Padding(1),
-        'year'      / Int8ub,
-        'week'      / Int8ub,
-        'month'     / Int8ub,
-        'day'       / Int8ub,
-        'hour'      / Int8ub,
-        'minute'    / Int8ub,
-        'second'    / Int8ub,
-        'pos'        / Int8ub,
-        'datH'      / Int8ub,
-        'datL'      / Int8ub,
-        'stat0'     / Int8ub,
-        'stat1'     / Int8ub
-        )
+            Padding(1),
+            'year'  / Int8ub,
+            'week'  / Int8ub,
+            'month' / Int8ub,
+            'day'   / Int8ub,
+            'hour'  / Int8ub,
+            'minute'/ Int8ub,
+            'second'/ Int8ub,
+            'pos'   / Int8ub,
+            'datH'  / Int8ub,
+            'datL'  / Int8ub,
+            'stat0' / Int8ub,
+            'stat1' / Int8ub
+           )
 
-    #db = GreedyRange(record)
-    db = Array(99, record)
+    mode = {
+            0b000 : 'normal',
+            0b010 : 'Pmin',
+            0b011 : 'Pmax',
+            0b100 : 'max',
+            0b101 : 'min',
+            0b110 : 'rel'
+            }
+
+    db = GreedyRange(record)
     dat = db.parse(blob)
 
-    cols = ('pos', 'date', 'time', 'value', 'stat0', 'stat1')
+    cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'stat1')
     ret = [", ".join(cols)]
 
     for rec in dat:
@@ -148,16 +155,25 @@ def decode_stored_data(blob):
             rec[key] = bcd2int(rec[key])
         rec['year'] += 2000
 
-        rec = {
-            'pos'  : rec['pos'],
-            'date' : "%4.4i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
-            'time' : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
-            'value': 100*rec['datH'] + rec['datL'],
-            'stat0': rec['stat0'],
-            'stat1': rec['stat1']
-            }
+        # reassemble the record in a more practical format
+        stat0 = decode_stat0(rec['stat0'])
 
-        ret.append(", ".join(([str(rec[col]) for col in cols])))
+        rec = {
+                'pos'  : rec['pos'],
+                'date' : "%4.4i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
+                'time' : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
+                'value': 100*rec['datH'] + rec['datL'],
+                'stat0': rec['stat0'],
+                'APO'  : not stat0['APO'],
+                'hold' : stat0['hold'],
+                'unit' : ('lux', 'fc')[stat0['unit']],
+                'range': (1, 2, 3, 4)[stat0['range']],
+                'mode' : mode[stat0['mode']],
+                'stat1': rec['stat1']
+                }
+        
+        if rec['pos'] > 0:
+            ret.append(", ".join(([str(rec[col]) for col in cols])))
 
     return("\n".join(ret))
 
@@ -166,10 +182,9 @@ def decode_logger_data(blob):
     "Decode the logger_data binary blob to csv"
 
     logger_buffer = Struct(
-        "data_logger buffer",
-        UBInt8('groups'),
-        UBInt16('buffersize')
-        )
+            'groups'     / Int8ub,
+            'buffersize' / Int16ub
+            )
     ret = logger_buffer.parse(blob)
 
 
@@ -177,22 +192,37 @@ def decode_timing_data(blob):
     "Decode the timing binary blob to csv"
 
     timing_data = Struct(
-        "timing data",
-        Padding(1),
-        UBInt8('year'),
-        UBInt8('week'),
-        UBInt8('month'),
-        UBInt8('day'),
-        UBInt8('hour'),
-        UBInt8('minute'),
-        UBInt8('second'),
-        LFloat32('value'), # XXX is this correct?
-        UBInt8('stat0'),
-        UBInt8('stat1'),
-        UBInt8('mem_no'),
-        UBInt8('read_no')
-        )
+            Padding(1),
+            'year'    / Int8ub,
+            'week'    / Int8ub,
+            'month'   / Int8ub,
+            'day'     / Int8ub,
+            'hour'    / Int8ub,
+            'minute'  / Int8ub,
+            'second'  / Int8ub,
+            'datH'    / Int8ub,
+            'datL'    / Int8ub,
+            'stat0'   / Int8ub,
+            'stat1'   / Int8ub,
+            'mem_no'  / Int8ub,
+            'read_no' / Int8ub
+            )
     ret = timing_data.parse(blob)
+
+
+def decode_stat0(byte):
+    "return a dict from stat0 byte data"
+    
+    stat0 = BitStruct(
+                'APO' / Flag,
+                'hold' / Flag,
+                'mode' / BitsInteger(3),
+                'unit' / Flag,
+                'range' / BitsInteger(2)
+            )
+    ret = stat0.parse(bytes([byte]))
+
+    return(ret)
 
 
 # command definition

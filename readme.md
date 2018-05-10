@@ -58,6 +58,31 @@ Typically you can stick to the defaults, maybe with the exception of the
 interface specification (in case /dev/ttyUSB0 is not what you need, certainly
 under Windows).
 
+# Some useful things from the manual
+
+Press REC + UNITS to enter setup.
+
+Peak min/max mode is able to detect short high/low peaks with a 10ms
+resolution.  Normal min/max mode is much slower than that.
+
+## Manual value storage
+
+Press REC to store current value in the next free position.
+
+Press REC + LOAD to clear the storage
+
+Press & hold LOAD to view stored values
+
+
+## Clear logger memory
+
+To start/stop logging press & hold REC 
+
+while meter is off:
+
+    press REX + Power
+
+
 
 # Protocol description
 
@@ -65,8 +90,10 @@ The light meter uses a binary protocol over the serial connection. Therefore,
 talking to it manually through a terminal program is not convenient.
 
 *Caution:* I am still in the process of putting together a full protocol
-description from  the chinglish documentation that I have. Accordingly, I am
-updating this as I learn. So don't rely on this, yet. 
+description from  the chinglish documentation that I got my hands on.  As it
+turns out, the documentation is sketchy and partially incorrect, so I am
+updating this document as I learn by reverse engineering. So don't rely on
+this, yet. 
 
 
 ## Sending commands
@@ -118,7 +145,46 @@ the type of blob. The actual data follows immediately after that.
 
 Most numerical data is encoded as binary coded decimal (BCD), i.e bytes are
 interpreted as two separate 4 bit nibbles which encode decimal digits (0-9),
-separately. Values larger than 1 byte are stored in little-endian format.
+separately. 
+
+
+### Manually stored data
+
+Command: get-stored-data (0x12)
+
+Magic number: 0xbb88 (2 bytes)
+
+99 data records of 13 bytes, each.
+
+Total blob length = 99x13 + 2 = 1289bytes.
+
+However, the instrument normally returns quite a few extra bytes.  The extra
+bytes are all 0x00.
+
+Record format:
+
+Pos | Bytes |  Content  | Type  | Comment
+----|-------|-----------|-------|----------------------
+0   | 1     |  0x00     | –     | reserved
+1   | 1     |  year     | BCD   | date: year, 2 digits
+2   | 1     |  weekday  | BCD   | date: weekday [1,7]
+3   | 1     |  month    | BCD   | date: month
+4   | 1     |  day      | BCD   | date: day
+5   | 1     |  hour     | BCD   | time: hour
+6   | 1     |  minute   | BCD   | time: minute
+7   | 1     |  second   | BCD   | time: second
+8   | 1     |  pos      | Uchar | storage position [1,99]
+9   | 1     |  datH     | Uchar | Measured value: high byte
+10  | 1     |  datL     | Uchar | Measured value: low byte
+11  | 1     |  stat0    | bin   | Status byte 0        
+12  | 1     |  stat1    | bin   | Status byte 1
+
+
+The data value uses a variety of BCD on byte level:
+
+    value = (100 * datH + datL) * Flevel
+
+XXX The level factor is not implemented, yet. 
 
 
 ### Timing data
@@ -148,44 +214,6 @@ Pos | Bytes | Content  | Type  | Comment
 14  | 1     | mem no   |       | ?
 15  | 1     | read no  |       | ?
 
-
-### Manually stored data
-
-Command: get-stored-data (0x12)
-
-Magic number: 0xbb88 (2 bytes)
-
-99 data records of 13 bytes, each.
-
-Total blob length = 99x13 + 2 = 1289bytes.
-
-However, the instrument returns more bytes than that (1352 in my case).
-The 63 extra bytes are all 0x00.
-
-Record format:
-
-Pos | Bytes |  Content  | Type  | Comment
-----|-------|-----------|-------|----------------------
-0   | 1     |  0x00     | –     | reserved
-1   | 1     |  year     | BCD   | date: year, 2 digits
-2   | 1     |  weekday  | BCD   | date: weekday [1,7]
-3   | 1     |  month    | BCD   | date: month
-4   | 1     |  day      | BCD   | date: day
-5   | 1     |  hour     | BCD   | time: hour
-6   | 1     |  minute   | BCD   | time: minute
-7   | 1     |  second   | BCD   | time: second
-8   | 1     |  pos      | Uchar | storage position [1,99]
-9   | 1     |  datH     | Uchar | Measured value: high byte
-10  | 1     |  datL     | Uchar | Measured value: low byte
-11  | 1     |  stat0    | bin   | Status byte 0        
-12  | 1     |  stat1    | bin   | Status byte 1
-
-
-The data value uses a funny variety of BCD on byte level:
-
-    value = (100 x datH + datL) * Flevel
-
-XXX The level factor is not implemented, yet. 
 
 
 ### Logger data
@@ -245,8 +273,6 @@ associated with a measurement as bit fields.
 
 
 ### Stat0 
-
-XXX -- transcribed from docs. Untested!
 
 Bits  | Meaning | Values
 ------|---------|----------------------------------------------------------
