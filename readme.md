@@ -109,20 +109,46 @@ section.
 
 XXX - to be written
 
-Data blobs allways start with a 2 byte magic number that indicates
-the type of blob. The actual data follwos immediately after that. 
+Data blobs always start with a 2 byte magic number that indicates
+the type of blob. The actual data follows immediately after that. 
 
-Most numerical data is encoded as binary coded decimal (BCD).
+Most numerical data is encoded as binary coded decimal (BCD), i.e bytes are
+interpreted as two separate 4 bit nibbles which encode decimal digits (0-9),
+separately. Values larger than 8 bit are stored in little-endian format
 
 
 ### Timing data
+
+Command: get-timing (0x11)
+
+Magic number: 0xaadd
+
+XXX data records of 16 bytes, each.
+
+Record format:
+
+Bytes |  Content  | Type  | Comment
+------|-----------|-------|----------------------
+1     |  0x00     | –     | reserved
+1     |  year     | BCD   | date: year, 2 digits
+1     |  week     | BCD   | date: week
+1     |  month    | BCD   | date: month
+1     |  day      | BCD   | date: day
+1     |  hour     | BCD   | time: hours
+1     |  minute   | BCD   | time: minutes
+1     |  second   | BCD   | time: seconds
+2     |  value    | ?     | Measured value
+1     |  stat0    | bin   | Status byte 0        
+1     |  stat1    | bin   | Status byte 1
+1     |  mem no   |       | ?
+1     |  read no  |       | ?
 
 
 ### (Manually) stored data
 
 Command: get-stored-data (0x12)
 
-magic number: 0xbb88
+Magic number: 0xbb88
 
 XXX data records of 12 bytes, each.
 
@@ -133,8 +159,8 @@ bytes |  content  | type  | Comment
 1     |  0x00     | –     | reserved
 1     |  year     | BCD   | date: year, 2 digits
 1     |  week     | BCD   | date: week
-1     |  month    | BCD   | month
-1     |  day      | BCD   | day
+1     |  month    | BCD   | date: month
+1     |  day      | BCD   | date: day
 1     |  hour     | BCD   | time: hours
 1     |  minute   | BCD   | time: minutes
 1     |  second   | BCD   | time: seconds
@@ -145,7 +171,54 @@ bytes |  content  | type  | Comment
 
 ### Logger data
 
+Command: get-logger-data (0x13)
+
+Magic number: 0xaacc
+
+XXX data records of 3 bytes, each.
+
+Record format:
+
+bytes |  content  | type    | Comment
+------|-----------|---------|----------------------
+1     |  group    | UInt8   | ?
+2     |  bufsize  | ULInt16 | ?
+
+
+
 ### Protocol transmission data
+
+Command: get-stored-data (0x14)
+
+Magic number: 0xaa56
+
+Record format:
+
+bytes |  content  | type  | Comment
+------|-----------|-------|----------------------
+1     |  group    | UInt8 | 
+1     |  sampling | UInt8 | 
+1     |  0x00     | UInt8 | reserved
+1     |  year     | UInt8 | 
+1     |  Mon-day  | UInt8 | 
+1     |  Yue      | UInt8 | 
+1     |  day      | UInt8 | 
+1     |  hour     | UInt8 | 
+1     |  minute   | UInt8 | 
+1     |  second   | UInt8 | 
+3     |  Data1    | data  | 1. data record
+3     |  Data2    | data  | 2. data record
+3     |  ...      | data  | ...
+
+
+Data record format:
+
+bytes |  content  | type  | Comment
+------|-----------|-------|----------------------
+2     |  Value    | BCD?  | Measures value
+1     |  Status   | UInt8 | Status0 byte
+
+
 
 
 ## Status bytes
@@ -158,11 +231,10 @@ associated with a measurement as bit fields.
 XXX -- transcribed from docs. Untested!
 
 Bits  | Meaning | Values
-------|---------|-------------------------------
+------|---------|----------------------------------------------------------
 7     | APO     | 0: on, 1: off
 6     | Hold    | 0: off, 1: on
-5,4,3 | Mode    | 000:Normal, 010:Pmin, 011:Pmax
-      |         | 100:Max, 101:min, 110:Rel
+5,4,3 | Mode    | 000:Normal, 010:Pmin, 011:Pmax, 100:Max, 101:Min, 110:Rel
 2     | units   | 0:lux, 1:fc
 0,1   | Range   | 00:range0, ... 11:range4
 
