@@ -4,19 +4,19 @@ pce174 - a little tool to communicate with a PCE-174 lightmeter/logger
 """
 
 # todo
-#   - implement get-stored-data
+#   - understand/decode value in stored-data record
+#   - write decoder for status information
 #   - implement get-logger-data
 #   - implement get-timing
-#   - implement BCD decoding
-#   - implement output decoding -> csv
-#   - write decoder for status information
 #   - implement logging interval setting
 #   - test all commands!
 
 import sys, argparse
 import serial
-from construct import *
 import binascii
+
+# tested with construct 2.5.5. The current versions (≥ 2.8 semm to be incompatible!)
+from construct import * 
 
 def main():
     "The main function - duh."
@@ -39,7 +39,7 @@ def main():
             elif args.format == "hex":
                 sys.stdout.buffer.write(binascii.hexlify(blob))
             elif args.format == "csv":
-                print(decode_blob(blob)),
+                print(decode_blob(blob))
         iface.close()
 
 
@@ -103,38 +103,49 @@ def decode_blob(blob):
 
 
 def decode_stored_data(blob):
-    "Decode the stored_data binary blob to dict"
+    "Decode the stored_data binary blob to CSV"
 
-    stored_data = Struct(
-        "Manually stored data",
+    record = Struct(
         Padding(1),
-        UBInt8('year'),
-        UBInt8('week'),
-        UBInt8('month'),
-        UBInt8('day'),
-        UBInt8('hour'),
-        UBInt8('minute'),
-        UBInt8('second'),
-        ULInt16('value'),
-        UBInt8('stat0'),
-        UBInt8('stat1'),
+        'year'      / Int8ub,
+        'week'      / Int8ub,
+        'month'     / Int8ub,
+        'day'       / Int8ub,
+        'hour'      / Int8ub,
+        'minute'    / Int8ub,
+        'second'    / Int8ub,
+        'value'     / Int16ul,
+        'stat0'     / Int8ub,
+        'stat1'     / Int8ub,
         Padding(1)
         )
 
-    dat = stored_data.parse(blob)
-    for key in ['year', 'week', 'month', 'day', 'hour', 'minute', 'second']:
-        dat[key] = bcd2int(dat[key])
-    dat['year'] += 2000
-    dat['value'] = hex(dat['value'])
+    #db = GreedyRange(record)
+    db = Array(99, record)
+    dat = db.parse(blob)
 
-    ret = {
-            'date' : "%4.4i-%2.2i-%2.2i" % (dat['year'], dat['month'], dat['day']),
-            'time' : "%2.2i:%2.2i:%2.2i" % (dat['hour'], dat['minute'], dat['second']),
-            'value': dat['value'],
-            'stat0': dat['stat0'],
-            'stat1': dat['stat1'],
+    cols = ('ID', 'date', 'time', 'value', 'stat0', 'stat1')
+    ret = [", ".join(cols)]
+
+    for i, rec in enumerate(dat):
+        for key in ['year', 'week', 'month', 'day', 'hour', 'minute', 'second']:
+            rec[key] = bcd2int(rec[key])
+        rec['year'] += 2000
+        rec['value'] = hex(rec['value'])
+
+
+        rec = {
+            'ID'   : i+1,
+            'date' : "%4.4i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
+            'time' : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
+            'value': rec['value'],
+            'stat0': rec['stat0'],
+            'stat1': rec['stat1']
             }
-    return(ret)
+
+        ret.append(", ".join(([str(rec[col]) for col in cols])))
+
+    return("\n".join(ret))
 
 
 def decode_logger_data(blob):
