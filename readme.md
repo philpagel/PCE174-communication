@@ -129,7 +129,7 @@ XXX data records of 12 bytes, each.
 Record format:
 
 bytes |  content  | type  | Comment
--------------------------------------------------
+------|-----------|-------|----------------------
 1     |  0x00     | –     | reserved
 1     |  year     | BCD   | date: year, 2 digits
 1     |  week     | BCD   | date: week
@@ -158,7 +158,7 @@ associated with a measurement as bit fields.
 XXX -- transcribed from docs. Untested!
 
 Bits  | Meaning | Values
-------------------------------------------------
+------|---------|-------------------------------
 7     | APO     | 0: on, 1: off
 6     | Hold    | 0: off, 1: on
 5,4,3 | Mode    | 000:Normal, 010:Pmin, 011:Pmax
@@ -172,7 +172,7 @@ Bits  | Meaning | Values
 XXX -- transcribed from docs. Untested!
 
 Bits  | Meaning   | Values
----------------------------------------------------------------
+------|-----------|--------------------------------------------
 8,7,6 | reserved  |
 5     | low power | 0:off, 1:on
 4     | signed    | 0:false, 1:true 
