@@ -109,12 +109,76 @@ section.
 
 XXX - to be written
 
+Data blobs allways start with a 2 byte magic number that indicates
+the type of blob. The actual data follwos immediately after that. 
+
+Most numerical data is encoded as binary coded decimal (BCD).
+
+
 ### Timing data
 
+
 ### (Manually) stored data
+
+Command: get-stored-data (0x12)
+
+magic number: 0xbb88
+
+XXX data records of 12 bytes, each.
+
+Record format:
+
+bytes |  content  | type  | Comment
+-------------------------------------------------
+1     |  0x00     | –     | reserved
+1     |  year     | BCD   | date: year, 2 digits
+1     |  week     | BCD   | date: week
+1     |  month    | BCD   | month
+1     |  day      | BCD   | day
+1     |  hour     | BCD   | time: hours
+1     |  minute   | BCD   | time: minutes
+1     |  second   | BCD   | time: seconds
+2     |  value    | ?     | Measured value
+1     |  stat0    | bin   | Status byte 0        
+1     |  stat1    | bin   | Status byte 1
+
 
 ### Logger data
 
 ### Protocol transmission data
+
+
+## Status bytes
+
+Some data records contain two status bytes that indicate the settings
+associated with a measurement as bit fields.
+
+### Stat0 
+
+XXX -- transcribed from docs. Untested!
+
+Bits  | Meaning | Values
+------------------------------------------------
+7     | APO     | 0: on, 1: off
+6     | Hold    | 0: off, 1: on
+5,4,3 | Mode    | 000:Normal, 010:Pmin, 011:Pmax
+      |         | 100:Max, 101:min, 110:Rel
+2     | units   | 0:lux, 1:fc
+0,1   | Range   | 00:range0, ... 11:range4
+
+
+### Stat1 
+
+XXX -- transcribed from docs. Untested!
+
+Bits  | Meaning   | Values
+---------------------------------------------------------------
+8,7,6 | reserved  |
+5     | low power | 0:off, 1:on
+4     | signed    | 0:false, 1:true 
+3,2   |     ?     | 00:time, 01:day, 10:sampling-rate, 11:year
+1,0   | ?         | 01:MEM, 10:LOAD
+
+Honestly, I have no idea what most of this means, yet.
 
 
