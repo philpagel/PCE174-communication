@@ -190,7 +190,7 @@ range     | Measurement range used (40, 400, ... 4000k)
 mode      | normal/Pmin/Pmax/min/max/rel 
 hold      | Was hold active? (hold/cont)
 APO       | Auto-power-off (on/off)
-power     | Power status (normal/low)
+power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
 memload   | No idea what this is (0/1/2). Name may change in the future.
 

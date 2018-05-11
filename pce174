@@ -6,9 +6,9 @@ A tool to communicate with a PCE-174 lightmeter/logger
 """
 
 # todo
-#   - what is memload? is this a usefull name?
 #   - implement get-logger-data
 #   - implement get-timing
+#   - what is memload? is this a usefull name?
 #   - find out how to send simultaneous key presses (if possible)
 #   - find out if we can set date, time and sampling interval through a command
 #   - maybe round output or asseble values in BCD to avoid funny numrical artifacts?
