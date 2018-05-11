@@ -4,15 +4,16 @@ pce174 - a little tool to communicate with a PCE-174 lightmeter/logger
 """
 
 # todo
-#   - understand/decode value in stored-data record: honor range correction
+#   - fix decoder for status information stat1
+#   - double check the renage levels and factors: doe they really differ frtom the docs?
 #   - find out how to handle signed/unsigned measurements
 #   - implement get-logger-data
 #   - implement get-timing
 #   - implement logging interval setting
-#   - write decoder for status information stat1
 #   - find out how to send simultaneous key presses (if possible)
 #   - find out if we can set date, time and sampling interval through a command
-#   - test all commands!
+#   - test, test, test
+
 
 import sys, argparse
 import serial
@@ -144,10 +145,23 @@ def decode_stored_data(blob):
             0b110 : 'rel'
             }
 
+    dispmode = {
+            0b00 : 'time',
+            0b01 : 'day',
+            0b10 : 'sampling',
+            0b11 : 'year',
+            }
+
+    memload = {
+            0b01 : 'mem',
+            0b10 : 'load'
+            }
+
+
     db = GreedyRange(record)
     dat = db.parse(blob)
 
-    cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'stat1')
+    cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'powerlow', 'signed', 'dispmode', 'memload', 'stat0', 'stat1')
     ret = [", ".join(cols)]
 
     for rec in dat:
@@ -157,21 +171,28 @@ def decode_stored_data(blob):
 
         # reassemble the record in a more practical format
         stat0 = decode_stat0(rec['stat0'])
+        stat1 = decode_stat1(rec['stat1'])
 
         rec = {
                 'pos'  : rec['pos'],
                 'date' : "%4.4i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
                 'time' : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
-                'value': 100*rec['datH'] + rec['datL'],
+                'value': (100*rec['datH'] + rec['datL']) * (100,0.1,1,10)[stat0['range']],
                 'stat0': rec['stat0'],
                 'APO'  : not stat0['APO'],
                 'hold' : stat0['hold'],
                 'unit' : ('lux', 'fc')[stat0['unit']],
-                'range': (1, 2, 3, 4)[stat0['range']],
+                'range': (3, 0, 1, 2)[stat0['range']],
                 'mode' : mode[stat0['mode']],
-                'stat1': rec['stat1']
+                'powerlow': stat1['powerlow'],
+                'signed'  : stat1['signed'],
+                'dispmode': dispmode[stat1['dispmode']],
+                'memload': stat1['memload'],
+                'stat0': bin(rec['stat0']),
+                'stat1': bin(rec['stat1'])
                 }
-        
+       
+        # turn rec into a comma separated row
         if rec['pos'] > 0:
             ret.append(", ".join(([str(rec[col]) for col in cols])))
 
@@ -221,6 +242,21 @@ def decode_stat0(byte):
                 'range' / BitsInteger(2)
             )
     ret = stat0.parse(bytes([byte]))
+
+    return(ret)
+
+
+def decode_stat1(byte):
+    "return a dict from stat1 byte data"
+    
+    stat1 = BitStruct(
+                BitsInteger(2),
+                'powerlow' / Flag,
+                'signed' / Flag,
+                'dispmode' / BitsInteger(2),
+                'memload' / BitsInteger(2)
+            )
+    ret = stat1.parse(bytes([byte]))
 
     return(ret)
 

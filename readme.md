@@ -35,6 +35,23 @@ xon/xoff  | False
 rts/cts   | False
 
 
+## Dependencies
+
+The program uses the construct library for parsing binary data which has
+undergone major redesign during the switch to v2.8 that lead to loss of
+backwards compatibility. Accordingly, Versions of construct <2.8 will not work!
+Development and testing was carried out with v2.9.
+
+You can find the library and documentation here:
+
+https://github.com/construct/construct
+https://construct.readthedocs.io/en/latest/
+
+If it is not provided by you distribution just install a local version :
+
+    pip install construct
+
+
 ## Usage
 
 To communicate with the light meter connect through USB and run the command
@@ -74,13 +91,11 @@ Press REC + LOAD to clear the storage
 Press & hold LOAD to view stored values
 
 
-## Clear logger memory
+## Data logger 
 
 To start/stop logging press & hold REC 
 
-while meter is off:
-
-    press REX + Power
+while meter is off: press REC + Power to clear logger memory
 
 
 
@@ -184,7 +199,15 @@ The data value uses a variety of BCD on byte level:
 
     value = (100 * datH + datL) * Flevel
 
-XXX The level factor is not implemented, yet. 
+with:
+
+Level  | Range | Flevel
+-------|-------|--------
+0      | 400   | 0.1
+1      | 4k    | 1.0
+2      | 40k   | 10
+3      | 400k  | 100
+
 
 
 ### Timing data
@@ -280,20 +303,22 @@ Bits  | Meaning | Values
 6     | Hold    | 0: off, 1: on
 5,4,3 | Mode    | 000:Normal, 010:Pmin, 011:Pmax, 100:Max, 101:Min, 110:Rel
 2     | units   | 0:lux, 1:fc
-0,1   | Range   | 00:range0, ... 11:range4
+0,1   | Range   | 00:range0, ... 11:range3
 
 
 ### Stat1 
 
-XXX -- transcribed from docs. Untested!
+This status byte indicated the display mode the instrument was in. I don't know
+why you would want to know that...
 
-Bits  | Meaning   | Values
-------|-----------|--------------------------------------------
-8,7,6 | reserved  |
-5     | low power | 0:off, 1:on
-4     | signed    | 0:false, 1:true 
-3,2   | ?         | 00:time, 01:day, 10:sampling-rate, 11:year
-1,0   | ?         | 01:MEM, 10:LOAD
+Bits  | Meaning       | Values
+------|---------------|--------------------------------------------
+8,7,6 | reserved      |
+5     | low power     | 0:off, 1:on
+4     | signed        | 0:false, 1:true 
+3,2   | displaymode   | 00:time, 01:day, 10:sampling-rate, 11:year
+1,0   | memload       | 01:MEM, 10:LOAD
+
 
 
 
