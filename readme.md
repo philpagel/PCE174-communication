@@ -13,6 +13,12 @@ instrument. However, parsing and decoding of the data received is still work in
 progress and considered non-functional. I also don't fully understand all
 commands, yet so they may have confusing names and/or descriptions.
 
+## Compatibility
+
+The program was developed under Linux but it *should* work under Windows and
+MacOS as well.  However this is untested. Please let me know if you have tried
+this and I'll at least update this statment.
+
 ## Connecting to a computer
 
 The light meter has a mini USB port. Upon connection to the computer the
@@ -37,17 +43,20 @@ rts/cts   | False
 
 ## Dependencies
 
+You need Python 3 for this to work.
+
 The program uses the construct library for parsing binary data which has
 undergone major redesign during the switch to v2.8 that lead to loss of
-backwards compatibility. Accordingly, Versions of construct <2.8 will not work!
+backwards compatibility. Accordingly, versions of construct <2.8 will not work!
 Development and testing was carried out with v2.9.
 
-You can find the library and documentation here:
+You can find the construct library and documentation here:
 
 https://github.com/construct/construct
+
 https://construct.readthedocs.io/en/latest/
 
-If it is not provided by you distribution just install a local version :
+If it is not provided by your distribution just install a local version :
 
     pip install construct
 
@@ -102,13 +111,20 @@ while meter is off: press REC + Power to clear logger memory
 # Protocol description
 
 The light meter uses a binary protocol over the serial connection. Therefore,
-talking to it manually through a terminal program is not convenient.
+talking to it manually through a terminal program is not fun.
 
-*Caution:* I am still in the process of putting together a full protocol
-description from  the chinglish documentation that I got my hands on.  As it
-turns out, the documentation is sketchy and partially incorrect, so I am
-updating this document as I learn by reverse engineering. So don't rely on
-this, yet. 
+The protocol documentation and implementation started from a chinglish piece of
+documentation that I got my hands on. As it turns out, the documentation is
+sketchy and partially incorrect, so quite a bit of reverse engineering went
+into this, too.
+
+I'd provide the original documentation here but don't feel like getting sued for
+copyright violations. So if you want it ask nicely and PCE or Extech may send
+it to you, too.
+
+*Caution:* This is still work in process and I am updating this document and
+the script as I learn. So don't complain if it damages you car, explodes your
+house or harms a kitten.
 
 
 ## Sending commands
@@ -130,12 +146,12 @@ Code | Command   |  Key               | Description
 0xdf | rel       |  REL/RIGHT         | Toggle rel mode
 0xef | hold      |  HOLD/DOWN         | Toggle hold mode
 0xbf | minmax    |  MAX/MIN/UP        | Toggle min/max/continuous mode
-0xfb | save      |  REC/SETUP         | Save reading
+0xfb | save      |  REC/SETUP         | Save reading to memory
+0xde | lighthold |  LIGHT/LOAD (hold) | Toggle view mode for saved data
+0xdc | logger    |  REC/SETUP (hold)  | Start/Stop data logging
 0xf3 | off       |  POWER             | Power off
-0xdc | logger    |  REC/SETUP (hold)  | ?
-0xdb | relhold   |  REL/RIGHT (hold)  | ?
-0xde | lighthold |  LIGHT/LOAD (hold) | ?
-0xda | peakhold  |  PEAK/LEFT (hold)  | ?
+0xdb | relhold   |  REL/RIGHT (hold)  | Switch to next display mode 
+0xda | peakhold  |  PEAK/LEFT (hold)  | Switch to previous display mode
 
 
 Commands that request data from the instrument cannot be triggered by button
@@ -159,8 +175,7 @@ Data blobs always start with a 2 byte magic number that indicates
 the type of blob. The actual data follows immediately after that. 
 
 Most numerical data is encoded as binary coded decimal (BCD), i.e bytes are
-interpreted as two separate 4 bit nibbles which encode decimal digits (0-9),
-separately. 
+interpreted as two separate 4 bit nibbles which encode decimal digits (0-9). 
 
 
 ### Manually stored data
@@ -169,7 +184,8 @@ Command: get-stored-data (0x12)
 
 Magic number: 0xbb88 (2 bytes)
 
-99 data records of 13 bytes, each.
+The instrument has 99 storage register so we expect 99 data records of 13
+bytes, each.
 
 Total blob length = 99x13 + 2 = 1289bytes.
 
@@ -189,25 +205,31 @@ Pos | Bytes |  Content  | Type  | Comment
 6   | 1     |  minute   | BCD   | time: minute
 7   | 1     |  second   | BCD   | time: second
 8   | 1     |  pos      | Uchar | storage position [1,99]
-9   | 1     |  datH     | Uchar | Measured value: high byte
-10  | 1     |  datL     | Uchar | Measured value: low byte
+9   | 1     |  datH     | Uchar | value: higher 2 digits
+10  | 1     |  datL     | Uchar | value: lower 2 digits
 11  | 1     |  stat0    | bin   | Status byte 0        
 12  | 1     |  stat1    | bin   | Status byte 1
 
 
-The data value uses a variety of BCD on byte level:
+The data value uses a variety of BCD on byte level. datH and datL are not BCD
+encoded, themselves.
 
     value = (100 * datH + datL) * Flevel
 
+
 with:
 
-Level  | Range | Flevel
--------|-------|--------
-0      | 400   | 0.1
-1      | 4k    | 1.0
-2      | 40k   | 10
-3      | 400k  | 100
+Range | Flevel
+------|--------
+400   | 0.1
+4k    | 1.0
+40k   | 10
+400k  | 100
 
+
+The instrument does return all storage positions - even the ones that are
+unused.  Those have a value of 0x00 for the pos field and are ignored by this
+program.
 
 
 ### Timing data
@@ -267,7 +289,7 @@ Record format:
 Pos | Bytes |  Content  | Type  | Comment
 ----|-------|-----------|-------|----------------------
 0   | 1     |  group    | BCD   | 
-1   | 1     |  sampling | BCD   | sampling rate [s] 
+1   | 1     |  sampling | BCD   | sampling interval [s] 
 2   | 1     |  0x00     | –     | reserved
 3   | 1     |  year     | BCD   | date: year 
 4   | 1     |  weekday  | BCD   | date: weekday [1,7]
@@ -285,8 +307,11 @@ Data record format:
 
 Pos | Bytes |  Content  | Type  | Comment
 ----|-------|-----------|-------|----------------------
-0   | 2     |  Value    | BCD?  | Measured value
+0   | 1     |  datH     | Uchar | value: higher 2 digits
+1   | 1     |  datL     | Uchar | value: lower 2 digits
 2   | 1     |  Stat0    | bin   | Stat0 byte
+
+See above (Manually stored data) for interpretation of datH and datL.
 
 
 ## Status bytes
@@ -303,7 +328,11 @@ Bits  | Meaning | Values
 6     | Hold    | 0: off, 1: on
 5,4,3 | Mode    | 000:Normal, 010:Pmin, 011:Pmax, 100:Max, 101:Min, 110:Rel
 2     | units   | 0:lux, 1:fc
-0,1   | Range   | 00:range0, ... 11:range3
+0,1   | Range   | 00:400k, 01:400, 10:4k ,11:40k
+
+In the program, we invert the value of APO to make it more intuitive (APO=true
+when on). The range definition conflicts with the original documentation but my
+experiments support the above.
 
 
 ### Stat1 
@@ -313,10 +342,10 @@ why you would want to know that...
 
 Bits  | Meaning       | Values
 ------|---------------|--------------------------------------------
-8,7,6 | reserved      |
+7,6   | reserved      |
 5     | low power     | 0:off, 1:on
-4     | signed        | 0:false, 1:true 
-3,2   | displaymode   | 00:time, 01:day, 10:sampling-rate, 11:year
+4     | negative      | 0:false, 1:true 
+3,2   | displaymode   | 00:time, 01:day, 10:sampling-interval, 11:year
 1,0   | memload       | 01:MEM, 10:LOAD
 
 

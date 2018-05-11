@@ -4,19 +4,19 @@ pce174 - a little tool to communicate with a PCE-174 lightmeter/logger
 """
 
 # todo
-#   - fix decoder for status information stat1
-#   - double check the renage levels and factors: doe they really differ frtom the docs?
-#   - find out how to handle signed/unsigned measurements
+#   - fix decoder for status information stat1 (memload translation non functional)
 #   - implement get-logger-data
 #   - implement get-timing
 #   - implement logging interval setting
 #   - find out how to send simultaneous key presses (if possible)
 #   - find out if we can set date, time and sampling interval through a command
+#   - improve -l output
 #   - test, test, test
 
 
 import sys, argparse
 import serial
+import warnings
 import binascii
 # requires construct ≥ 2.8 (tested with 2.9)
 from construct import * 
@@ -36,6 +36,7 @@ def main():
             iface = serial.Serial(args.interface, args.baud, timeout=5)
         except:
             sys.exit("Unable to connect to device.") 
+
         hello = b"\x87\x83"	# command prefix
         msg = hello + cmd[args.command]['cmd']
         iface.write(msg)
@@ -51,7 +52,7 @@ def main():
 
 
 def getargs():
-    "Get commandline options and arguments"
+    "Return commandline options and arguments"
 
     parser = argparse.ArgumentParser(description="Talk to a PCE-174 lightmeter/logger")
 
@@ -74,7 +75,7 @@ def bcd2int(dat):
     while dat != 0:
         val = dat & 0x0f
         if val > 9:
-            sys.exit("Illegal tetrade encountered in BCD conversion.")
+            warnings.warn("Pseudo-tetrade encountered in BCD conversion.")
         ret += f * val
         f *= 10
         dat = dat >> 4
@@ -136,60 +137,47 @@ def decode_stored_data(blob):
             'stat1' / Int8ub
            )
 
-    mode = {
-            0b000 : 'normal',
-            0b010 : 'Pmin',
-            0b011 : 'Pmax',
-            0b100 : 'max',
-            0b101 : 'min',
-            0b110 : 'rel'
+    # factor to set decimal point depending on range
+    Flevel = {
+            '40'   : 0.01,
+            '400'  : 0.1,
+            '4k'   : 1.0,
+            '40k'  : 10,
+            '400k' : 100
             }
-
-    dispmode = {
-            0b00 : 'time',
-            0b01 : 'day',
-            0b10 : 'sampling',
-            0b11 : 'year',
-            }
-
-    memload = {
-            0b01 : 'mem',
-            0b10 : 'load'
-            }
-
 
     db = GreedyRange(record)
     dat = db.parse(blob)
 
-    cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'powerlow', 'signed', 'dispmode', 'memload', 'stat0', 'stat1')
+    # define columns and assemble header
+    cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload')
     ret = [", ".join(cols)]
 
     for rec in dat:
+        # turn bcd encoded variables into ints
         for key in ['year', 'week', 'month', 'day', 'hour', 'minute', 'second']:
             rec[key] = bcd2int(rec[key])
-        rec['year'] += 2000
 
-        # reassemble the record in a more practical format
+        rec['year'] += 2000
+ 
+        # decode the stat bytes
         stat0 = decode_stat0(rec['stat0'])
         stat1 = decode_stat1(rec['stat1'])
 
+        # reassemble the record in a more practical format
         rec = {
-                'pos'  : rec['pos'],
-                'date' : "%4.4i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
-                'time' : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
-                'value': (100*rec['datH'] + rec['datL']) * (100,0.1,1,10)[stat0['range']],
-                'stat0': rec['stat0'],
-                'APO'  : not stat0['APO'],
-                'hold' : stat0['hold'],
-                'unit' : ('lux', 'fc')[stat0['unit']],
-                'range': (3, 0, 1, 2)[stat0['range']],
-                'mode' : mode[stat0['mode']],
-                'powerlow': stat1['powerlow'],
-                'signed'  : stat1['signed'],
-                'dispmode': dispmode[stat1['dispmode']],
-                'memload': stat1['memload'],
-                'stat0': bin(rec['stat0']),
-                'stat1': bin(rec['stat1'])
+                'pos'      : rec['pos'],
+                'date'     : "%4.4i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
+                'time'     : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
+                'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * Flevel[stat0['range']],
+                'APO'      : stat0['APO'],
+                'hold'     : stat0['hold'],
+                'unit'     : stat0['unit'],
+                'range'    : stat0['range'],
+                'mode'     : stat0['mode'],
+                'power'    : stat1['power'],
+                'dispmode' : stat1['dispmode'],
+                'memload'  : stat1['memload']
                 }
        
         # turn rec into a comma separated row
@@ -235,28 +223,66 @@ def decode_stat0(byte):
     "return a dict from stat0 byte data"
     
     stat0 = BitStruct(
-                'APO' / Flag,
-                'hold' / Flag,
-                'mode' / BitsInteger(3),
-                'unit' / Flag,
+                'APO'   / Flag,
+                'hold'  / Flag,
+                'mode'  / BitsInteger(3),
+                'unit'  / Flag,
                 'range' / BitsInteger(2)
             )
     ret = stat0.parse(bytes([byte]))
 
+    Range = {   # yes, this looks wrong but it is correct.
+            'lux' : ('400k', '400',  '4k', '40k' ),
+            'fc'  : ( '40k',  '40', '400',  '4k' )
+            }
+    
+    mode = {
+            0b000 : 'normal',
+            0b010 : 'Pmin',
+            0b011 : 'Pmax',
+            0b100 : 'max',
+            0b101 : 'min',
+            0b110 : 'rel'
+            }
+
+    ret['unit'] = ('lux', 'fc')[ret['unit']]
+    ret['range'] = Range[ret['unit']][ret['range']]
+    ret['APO'] = ('on', 'off')[ret['APO']]
+    ret['mode'] = mode[ret['mode']]
+    ret['hold'] = ('cont', 'hold')[ret['hold']]
+    
     return(ret)
 
 
 def decode_stat1(byte):
     "return a dict from stat1 byte data"
     
-    stat1 = BitStruct(
+    Stat1 = BitStruct(
                 BitsInteger(2),
-                'powerlow' / Flag,
-                'signed' / Flag,
+                'power'    / Flag,
+                'sign'     / Flag,
                 'dispmode' / BitsInteger(2),
-                'memload' / BitsInteger(2)
+                'memload'  / BitsInteger(2)
             )
-    ret = stat1.parse(bytes([byte]))
+    
+    ret = Stat1.parse(bytes([byte]))
+    
+    dispmode = {
+            0b00 : 'time',
+            0b01 : 'day',
+            0b10 : 'sampling',
+            0b11 : 'year',
+            }
+
+    memload = {
+            0b01 : 'mem',
+            0b10 : 'load'
+            }
+
+    ret['dispmode'] = dispmode[ret['dispmode']]
+    ret['sign'] = (1, -1)[ret['sign']]
+    ret['power'] = ('ok', 'low')[ret['power']]
+    #ret['memload'] = memload[ret['memload']]
 
     return(ret)
 
@@ -276,7 +302,7 @@ cmd = {
         'save' : { 
             'cmd' : b"\xfb", 
             'ret' : False,
-            'desc': "Mem/setup"
+            'desc': "Save reading to memory"
             },
         'peak' : { 
             'cmd' : b"\xf7", 
@@ -301,22 +327,22 @@ cmd = {
         'logger' : { 
             'cmd' : b"\xdc", 
             'ret' : False,
-            'desc': "??? Data logger hold REC"
+            'desc': "Start/stop data logging"
             },
         'relhold' : { 
             'cmd' : b"\xdb", 
             'ret' : False,
-            'desc': ""
+            'desc': "Switch to next display mode"
             },
         'lighthold' : { 
             'cmd' : b"\xde", 
             'ret' : False,
-            'desc': "???"
+            'desc': "Toggle view mode for saved data"
             },
         'peakhold' : { 
             'cmd' : b"\xda", 
             'ret' : False,
-            'desc': "???"
+            'desc': "Switch to previous display mode"
             },
         'range' : { 
             'cmd' : b"\x7f", 
