@@ -8,27 +8,44 @@ don't own the latter I have no way to test this.  The user manual for the
 Extech version of the instrument is quite a bit better than the PCE version, so
 try and find it online...
 
-Currently, the script can send control commands and request data from the
-instrument. However, parsing and decoding of the data received is still work in
-progress and considered non-functional. I also don't fully understand all
-commands, yet so they may have confusing names and/or descriptions.
+See `protocol.md` for a detailed description of the communication protocol.
+
+
+## Status
+
+Currently, the script can send control commands and read manually stored data
+from the instrument.
+
+Reading timing data and logger memory does not work, yet.
+
+Known issues:
+
+* I am not quite sure what `memload` from the `Stat0` byte does. Once I find
+  out I may change the name so reflect its meaning. I'll leave that to a later
+  release.
+* Reading logger data is not implemented, yet.
+* Reading timing data is not implemented, yet.
+* I have tested the features that are implemented, but not extensively.  So
+  it's time to get an alpha version out there. Feedback/bug reports are
+  welcome.
+
 
 ## Compatibility
 
 The program was developed under Linux but it *should* work under Windows and
 MacOS as well.  However this is untested. Please let me know if you have tried
-this and I'll at least update this statment.
+this and I'll at least update this statement.
 
 ## Connecting to a computer
 
 The light meter has a mini USB port. Upon connection to the computer the
-instrument identifies as a CP2102 USB to UART bridge (device ID 10c4:ea60). 
+instrument identifies as a CP2102 USB to UART bridge (device ID `10c4:ea60`). 
 
 On my Debian Linux system, it is recognized out of the box; under Windows you
-may need to install the respective driver (from the interweb or the Windows
+may need to install the respective driver (from the web or the Windows
 software CD that comes with the instrument). Mac anyone?
 
-Serial communication parameters are 9600bps8N1. Or more verbose:
+Serial communication parameters are `9600bps8N1`. Or more verbosely:
 
 parameter | value
 ----------|---------
@@ -45,10 +62,10 @@ rts/cts   | False
 
 You need Python 3 for this to work.
 
-The program uses the construct library for parsing binary data which has
+The program uses the `construct` library for parsing binary data which has
 undergone major redesign during the switch to v2.8 that lead to loss of
-backwards compatibility. Accordingly, versions of construct <2.8 will not work!
-Development and testing was carried out with v2.9.
+backwards compatibility. Accordingly, versions of `construct` <2.8 will not
+work!  Development and testing was carried out with v2.9.
 
 You can find the construct library and documentation here:
 
@@ -56,7 +73,7 @@ https://github.com/construct/construct
 
 https://construct.readthedocs.io/en/latest/
 
-If it is not provided by your distribution just install a local version :
+If it is not provided by your distribution just install a local version:
 
     pip install construct
 
@@ -81,273 +98,135 @@ like this:
       -f {csv,raw,hex}  return data in the specified format (csv)
 
 Typically you can stick to the defaults, maybe with the exception of the
-interface specification (in case /dev/ttyUSB0 is not what you need, certainly
+interface specification (in case `/dev/ttyUSB0` is not what you need, certainly
 under Windows).
+
+The following list describes all commands that are available as of now. The
+command names were chosen to reflect what they do. Most of them correspond to
+key presses on the instrument. See *Button* entry for this information.
+
+    Available commands:
+
+      units
+          Toggle units between lux and fc
+          Button: UNITS
+
+      light
+          Toggle backlight
+          Button: Light/LOAD
+
+      range
+          Cycle through measurement ranges
+          Button: RANGE/APO
+
+      save
+          Save reading to memory
+          Button: REC/Setup
+
+      peak
+          Toggle peak value display
+          Button: PEAK/LEFT
+
+      rel
+          Toggle realtive reading
+          Button: REL/RIGHT
+
+      minmax
+          Toggle Min/Max/current value display 
+          Button: MAX/MIN/UP
+
+      hold
+          Toggle hold
+          Button: HOLD/DOWN
+
+      off
+          Turn off the instrument
+          Button: POWER
+
+      logging
+          Start/stop data logging
+          Button: REC-hold
+
+      prevview
+          Switch to previous display view mode
+          Button: PEAK-hold
+
+      nextview
+          Switch to next display view mode
+          Button: REL-hold
+
+      viewsaved
+          Toggle view mode for saved data
+          Button: LIGHT/LOAD-hold
+
+      get-saved-data
+          Read manually saved data
+          Button: None
+          Returns data in the specified format (-f)
+
+
+## get-saved-data
+
+This command reads a table of manually saved data from the instrument.
+By default, the command returns comma separated data (CSV) to `STDOUT`.
+Example:
+
+    pos, date, time, value, unit, range, mode, hold, APO, power, dispmode, memload
+    1, 2007-08-15, 20:11:34, 20.1, lux, 400, normal, cont, on, ok, time, 1
+    2, 2007-08-15, 20:11:37, 4.0, lux, 4k, normal, cont, on, ok, time, 1
+    3, 2007-08-15, 20:11:40, 0, lux, 40k, normal, cont, on, ok, time, 1
+    4, 2007-08-15, 20:11:43, 0, lux, 400k, normal, cont, on, ok, time, 1
+
+The first row contains table headers with the following meaning:
+
+Column    | Description
+----------|-----------------------------------------------
+pos       | Number of the storage position
+date      | Date in ISO-8601 format (YYYY-MM-DD)
+time      | Time (HH:MM:SS)
+value     | Numerical value
+unit      | Unit of measurement (lux/fc)
+range     | Measurement range used (40, 400, ... 4000k)
+mode      | normal/Pmin/Pmax/min/max/rel 
+hold      | Was hold active? (hold/cont)
+APO       | Auto-power-off (on/off)
+power     | Power status (normal/low)
+dispmode  | Active display mode (time/day/sampling/year)
+memload   | No idea what this is (0/1/2). Name may change in the future.
+
+In raw mode (`-f raw`), a binary blob is written to `STDOUT`. This may be useful
+for debugging or if you want to deal with the data yourself.
+
+Hex mode (`-f hex`) is similar to raw mode but encodes the raw blob in
+hexadecimal.  Again – useful for debugging.
+
+The script ignores the `weekday` field in the data, because it has a few
+issues: The weekday is set and returned as a number (1-7) and manually set –
+i.e. the instrument does not try to ensure that the weekday entry matches the
+date. In order to avoid confusion, I decided to ignore the weekday. If you need
+the weekday, better compute it from the date.
+
 
 # Some useful things from the manual
 
-Press REC + UNITS to enter setup.
+Press `REC + UNITS` to enter setup.
 
 Peak min/max mode is able to detect short high/low peaks with a 10ms
 resolution.  Normal min/max mode is much slower than that.
 
+
 ## Manual value storage
 
-Press REC to store current value in the next free position.
+Press `REC` to store current value in the next free position.
 
-Press REC + LOAD to clear the storage
+Press `REC + LOAD` to clear the storage.
 
-Press & hold LOAD to view stored values
+Press & hold `LOAD` to view stored values.
 
 
 ## Data logger 
 
-To start/stop logging press & hold REC 
+To start/stop logging press & hold `REC`.
 
-while meter is off: press REC + Power to clear logger memory
-
-
-
-# Protocol description
-
-The light meter uses a binary protocol over the serial connection. Therefore,
-talking to it manually through a terminal program is not fun.
-
-The protocol documentation and implementation started from a chinglish piece of
-documentation that I got my hands on. As it turns out, the documentation is
-sketchy and partially incorrect, so quite a bit of reverse engineering went
-into this, too.
-
-I'd provide the original documentation here but don't feel like getting sued for
-copyright violations. So if you want it ask nicely and PCE or Extech may send
-it to you, too.
-
-*Caution:* This is still work in process and I am updating this document and
-the script as I learn. So don't complain if it damages you car, explodes your
-house or harms a kitten.
-
-
-## Sending commands
-
-All commands are preceded by sending the two magic bytes:
-
-    0x87 0x83
-
-After that, send a single code byte to run the desired command.  For the most
-part, the commands directly correspond to key presses on the instrument (see
-manual for details):
-                            
-Code | Command   |  Key               | Description
------|-----------|--------------------|------------------------------------
-0xfe | units     |  UNITS key         | Toggle units (lux/fc)
-0x7f | range     |  RANGE/APO         | Toggle measurement ranges
-0xfd | light     |  LIGHT/LOAD key    | Toggle backlight
-0xf7 | peak      |  PEAK/LEFT         | Toggle peak min/max mode
-0xdf | rel       |  REL/RIGHT         | Toggle rel mode
-0xef | hold      |  HOLD/DOWN         | Toggle hold mode
-0xbf | minmax    |  MAX/MIN/UP        | Toggle min/max/continuous mode
-0xfb | save      |  REC/SETUP         | Save reading to memory
-0xde | lighthold |  LIGHT/LOAD (hold) | Toggle view mode for saved data
-0xdc | logger    |  REC/SETUP (hold)  | Start/Stop data logging
-0xf3 | off       |  POWER             | Power off
-0xdb | relhold   |  REL/RIGHT (hold)  | Switch to next display mode 
-0xda | peakhold  |  PEAK/LEFT (hold)  | Switch to previous display mode
-
-
-Commands that request data from the instrument cannot be triggered by button
-presses:
-
-Code | Command           | Description
------|-------------------|-------------------------------------------------
-0x11 | get-timing        | ?
-0x12 | get-stored-data   | Read manually stored data registers
-0x13 | get-logger-data   | Read logger data
-0x14 | get-data-protocol | ?
-
-After receiving one of these commands, the instrument returns a binary blob
-that requires decoding. The structure of these blobs is described in the next
-section.
-
-
-## Detailed description of received data blobs
-
-Data blobs always start with a 2 byte magic number that indicates
-the type of blob. The actual data follows immediately after that. 
-
-Most numerical data is encoded as binary coded decimal (BCD), i.e bytes are
-interpreted as two separate 4 bit nibbles which encode decimal digits (0-9). 
-
-
-### Manually stored data
-
-Command: get-stored-data (0x12)
-
-Magic number: 0xbb88 (2 bytes)
-
-The instrument has 99 storage register so we expect 99 data records of 13
-bytes, each.
-
-Total blob length = 99x13 + 2 = 1289bytes.
-
-However, the instrument normally returns quite a few extra bytes.  The extra
-bytes are all 0x00.
-
-Record format:
-
-Pos | Bytes |  Content  | Type  | Comment
-----|-------|-----------|-------|----------------------
-0   | 1     |  0x00     | –     | reserved
-1   | 1     |  year     | BCD   | date: year, 2 digits
-2   | 1     |  weekday  | BCD   | date: weekday [1,7]
-3   | 1     |  month    | BCD   | date: month
-4   | 1     |  day      | BCD   | date: day
-5   | 1     |  hour     | BCD   | time: hour
-6   | 1     |  minute   | BCD   | time: minute
-7   | 1     |  second   | BCD   | time: second
-8   | 1     |  pos      | Uchar | storage position [1,99]
-9   | 1     |  datH     | Uchar | value: higher 2 digits
-10  | 1     |  datL     | Uchar | value: lower 2 digits
-11  | 1     |  stat0    | bin   | Status byte 0        
-12  | 1     |  stat1    | bin   | Status byte 1
-
-
-The data value uses a variety of BCD on byte level. datH and datL are not BCD
-encoded, themselves.
-
-    value = (100 * datH + datL) * Flevel
-
-
-with:
-
-Range | Flevel
-------|--------
-400   | 0.1
-4k    | 1.0
-40k   | 10
-400k  | 100
-
-
-The instrument does return all storage positions - even the ones that are
-unused.  Those have a value of 0x00 for the pos field and are ignored by this
-program.
-
-
-### Timing data
-
-Command: get-timing (0x11)
-
-Magic number: 0xaadd
-
-XXX data records of 16 bytes, each.
-
-Record format:
-
-Pos | Bytes | Content  | Type  | Comment
-----|-------|----------|-------|----------------------
-0   | 1     | 0x00     | –     | reserved
-1   | 1     | year     | BCD   | date: year, 2 digits
-2   | 1     | weekday  | BCD   | date: weekday [1, 7]
-3   | 1     | month    | BCD   | date: month
-4   | 1     | day      | BCD   | date: day
-5   | 1     | hour     | BCD   | time: hours
-6   | 1     | minute   | BCD   | time: minutes
-7   | 1     | second   | BCD   | time: seconds
-8   | 2     | value    | ?     | Measured value real?
-10  | 2     | value    | ?     | Measured value data?
-12  | 1     | stat0    | bin   | Status byte 0        
-13  | 1     | stat1    | bin   | Status byte 1
-14  | 1     | mem no   |       | ?
-15  | 1     | read no  |       | ?
-
-
-
-### Logger data
-
-Command: get-logger-data (0x13)
-
-Magic number: 0xaacc
-
-XXX data records of 3 bytes, each.
-
-Record format:
-
-Pos |Bytes |  Content  | Type    | Comment
-----|------|-----------|---------|----------------------
-0   |1     |  group    | UInt8   | ?
-1   |2     |  bufsize  | ULInt16 | ?
-
-
-
-### Protocol transmission data
-
-Command: get-stored-data (0x14)
-
-Magic number: 0xaa56
-
-Record format:
-
-Pos | Bytes |  Content  | Type  | Comment
-----|-------|-----------|-------|----------------------
-0   | 1     |  group    | BCD   | 
-1   | 1     |  sampling | BCD   | sampling interval [s] 
-2   | 1     |  0x00     | –     | reserved
-3   | 1     |  year     | BCD   | date: year 
-4   | 1     |  weekday  | BCD   | date: weekday [1,7]
-5   | 1     |  month    | BCD   | date: month
-6   | 1     |  day      | BCD   | date: day
-7   | 1     |  hour     | BCD   | time: hour
-8   | 1     |  minute   | BCD   | time: minute
-9   | 1     |  second   | BCD   | time: second
-10  | 3     |  Data1    | data  | 1. data record
-13  | 3     |  Data2    | data  | 2. data record
-16  | 3     |  ...      | data  | ...
-
-
-Data record format:
-
-Pos | Bytes |  Content  | Type  | Comment
-----|-------|-----------|-------|----------------------
-0   | 1     |  datH     | Uchar | value: higher 2 digits
-1   | 1     |  datL     | Uchar | value: lower 2 digits
-2   | 1     |  Stat0    | bin   | Stat0 byte
-
-See above (Manually stored data) for interpretation of datH and datL.
-
-
-## Status bytes
-
-Some data records contain status bytes that indicate the settings
-associated with a measurement as bit fields.
-
-
-### Stat0 
-
-Bits  | Meaning | Values
-------|---------|----------------------------------------------------------
-7     | APO     | 0: on, 1: off
-6     | Hold    | 0: off, 1: on
-5,4,3 | Mode    | 000:Normal, 010:Pmin, 011:Pmax, 100:Max, 101:Min, 110:Rel
-2     | units   | 0:lux, 1:fc
-0,1   | Range   | 00:400k, 01:400, 10:4k ,11:40k
-
-In the program, we invert the value of APO to make it more intuitive (APO=true
-when on). The range definition conflicts with the original documentation but my
-experiments support the above.
-
-
-### Stat1 
-
-This status byte indicated the display mode the instrument was in. I don't know
-why you would want to know that...
-
-Bits  | Meaning       | Values
-------|---------------|--------------------------------------------
-7,6   | reserved      |
-5     | low power     | 0:off, 1:on
-4     | negative      | 0:false, 1:true 
-3,2   | displaymode   | 00:time, 01:day, 10:sampling-interval, 11:year
-1,0   | memload       | 01:MEM, 10:LOAD
-
-
-
+To clear logger memory, press `REC` + Power while the meter is off.
 
