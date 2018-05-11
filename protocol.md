@@ -96,6 +96,8 @@ Pos | Bytes | Content  | Type  | Comment
 14  | 1     | mem_no   | bin   | Number of saved data records
 15  | 1     | read_no  | bin   | ?
 
+In normal mode, abs and reval are identical. In rel mode, absval ist the raw
+reading.
 
 
 ### Manually stored data

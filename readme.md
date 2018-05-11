@@ -93,11 +93,14 @@ like this:
       -l, --list        List all available commands
       -i INTERFACE      interface to connect to (/dev/ttyUSB0)
       -b BAUD           baudrate (9600)
+      -t TIMEOUT        serial communication timeout [s] (3)
       -f {csv,raw,hex}  return data in the specified format (csv)
 
 Typically you can stick to the defaults, maybe with the exception of the
 interface specification (in case `/dev/ttyUSB0` is not what you need, certainly
-under Windows).
+under Windows). In my hands, the default TIMEOUT is enough for reading saved
+data.  For live data 0.3s work for me. If timeout is too short, you will get
+truncated data.
 
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
@@ -157,16 +160,23 @@ key presses on the instrument. See *Button* entry for this information.
           Toggle view mode for saved data
           Button: LIGHT/LOAD-hold
 
+      get-live-data
+          Read live data.
+          Button: None
+          Returns data in the specified format (-f)
+
       get-saved-data
           Read manually saved data
           Button: None
           Returns data in the specified format (-f)
 
+
 ## get-live-data
 
-This commandread live data from the instrument. I.e. the current readings.
-By default, the command returns comma separated data (CSV) to `STDOUT`.
-Example:
+This command reads live data from the instrument. I.e. the current readings.
+This can be used for single readings or automated logging from a computer
+without using the logging feature of the instrument.  By default, the command
+returns comma separated data (CSV) to `STDOUT`.  Example:
 
     date, time, value, relvalue, unit, range, mode, hold, APO, power, dispmode, memload, mem_no, read_no
     2007-08-15, 23:49:58, 21.1, 21.1, lux, 400, normal, cont, on, ok, time, mem, 27, 12
@@ -177,8 +187,8 @@ Column    | Description
 ----------|-----------------------------------------------
 date      | Date in ISO-8601 format (YYYY-MM-DD)
 time      | Time (HH:MM:SS)
-value     | Absolute numerical value
-relvalue  | relative numerical value
+value     | Numerical value of reading
+rawvalue  | raw numerical value 
 unit      | Unit of measurement (lux/fc)
 range     | Measurement range used (40, 400, ... 4000k)
 mode      | normal/Pmin/Pmax/min/max/rel 
@@ -187,12 +197,12 @@ APO       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
 memload   | No idea what this is (0/1/2). Name may change in the future.
-mem_no    | Number of manually staved records in memory. (See get-saved-data)
+mem_no    | Number of manually saved records in memory. (See get-saved-data)
 read_no   | ?
 
-In normal mode, `value` and `relvalue` are identical. In *rel* mode however,
-`value` contains the absolute reading (that would be measured with out *rel*
-mode) and `relvalue` is the relative reading as displayed on the screen.
+In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
+`rawvalue` contains the absolute reading (that would be measured with out *rel*
+mode) and `value` is the relative reading as displayed on the screen.
 
 In raw mode (`-f raw`), a binary blob is written to `STDOUT`. This may be useful
 for debugging or if you want to deal with the data yourself.

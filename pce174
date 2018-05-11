@@ -40,7 +40,7 @@ def main():
             print()
     elif args.command in cmd:
         try:
-            iface = serial.Serial(args.interface, args.baud, timeout=5)
+            iface = serial.Serial(args.interface, args.baud, timeout=args.timeout)
         except:
             sys.exit("Unable to connect to device.") 
 
@@ -63,9 +63,10 @@ def getargs():
 
     parser = argparse.ArgumentParser(description="Talk to a PCE-174 lightmeter/logger")
 
-    parser.add_argument('-l', '--list', dest='list', action='store_true', help="List all available commands")
+    parser.add_argument('-l', '--list', dest='list', action='store_true', help="list all available commands")
     parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to (/dev/ttyUSB0)")
     parser.add_argument('-b', dest="baud", type=int, default=9600, help="baudrate (9600)")
+    parser.add_argument('-t', dest="timeout", type=float, default=3, help="serial communication timeout [s] (3)")
     parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv','raw','hex'], 
             help="return data in the specified format (csv)"
             )
@@ -135,7 +136,7 @@ def decode_live_data(blob):
     rec = Live_data.parse(blob)
 
     # define columns and assemble header
-    cols = ('date', 'time', 'value', 'relvalue', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload', 'mem_no', 'read_no')
+    cols = ('date', 'time', 'value', 'rawvalue', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload', 'mem_no', 'read_no')
     ret = [", ".join(cols)]
 
     # bcd decoding
@@ -149,8 +150,8 @@ def decode_live_data(blob):
     rec = {
             'date'     : "20%2.2i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
             'time'     : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
-            'value'    : (100*rec['dat0H'] + rec['dat0L']) * stat0['Frange'],
-            'relvalue' : stat1['sign'] * (100*rec['dat1H'] + rec['dat1L']) * stat0['Frange'],
+            'value'    : stat1['sign'] * (100*rec['dat1H'] + rec['dat1L']) * stat0['Frange'],
+            'rawvalue' : (100*rec['dat0H'] + rec['dat0L']) * stat0['Frange'],
             'APO'      : stat0['APO'],
             'hold'     : stat0['hold'],
             'unit'     : stat0['unit'],
@@ -436,19 +437,19 @@ cmd = OrderedDict([
             'desc': "Toggle view mode for saved data"
             }
         ),
-        ('get-saved-data' , { 
-            'cmd' : b"\x12", 
-            'ret' : True,
-            'key' : None,
-            'desc': "Read manually saved data"
-            }
-        ),
         ('get-live-data' , { 
             'cmd' : b"\x11", 
             'ret' : True,
             'key' : None,
             'desc': "Read live data."
             },
+        ),
+        ('get-saved-data' , { 
+            'cmd' : b"\x12", 
+            'ret' : True,
+            'key' : None,
+            'desc': "Read manually saved data"
+            }
         )
 # FIXME
 # these are not yet functional:
