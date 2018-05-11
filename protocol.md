@@ -67,6 +67,36 @@ the type of blob. The actual data follows immediately after that.
 Most numerical data is encoded as binary coded decimal (BCD), i.e bytes are
 interpreted as two separate 4 bit nibbles which encode decimal digits (0-9). 
 
+### Live data
+
+Command: get-live-data (0x11)
+
+Magic number: 0xaadd
+
+1 data record of 16 bytes.
+
+Record format:
+
+Pos | Bytes | Content  | Type  | Comment
+----|-------|----------|-------|----------------------
+0   | 1     | 0x00     | –     | reserved
+1   | 1     | year     | BCD   | date: year, 2 digits
+2   | 1     | weekday  | BCD   | date: weekday [1, 7]
+3   | 1     | month    | BCD   | date: month
+4   | 1     | day      | BCD   | date: day
+5   | 1     | hour     | BCD   | time: hours
+6   | 1     | minute   | BCD   | time: minutes
+7   | 1     | second   | BCD   | time: seconds
+8   | 1     | absvalH  | Uchar | absolute value: higher 2 digits
+9   | 1     | absvalL  | Uchar | absolute value: lower 2 digits
+10  | 1     | relvalH  | Uchar | relative value: higher 2 digits
+11  | 1     | relvalL  | Uchar | relative value: lower 2 digits
+12  | 1     | stat0    | bin   | Status byte 0        
+13  | 1     | stat1    | bin   | Status byte 1
+14  | 1     | mem_no   | bin   | Number of saved data records
+15  | 1     | read_no  | bin   | ?
+
+
 
 ### Manually stored data
 
@@ -122,35 +152,6 @@ and Stat0_sign is the sign from the Stat0 byte.
 The instrument does return all storage positions - even the ones that are
 unused.  Those have a value of 0x00 for the pos field and are ignored by this
 program.
-
-
-### Timing data
-
-Command: get-timing (0x11)
-
-Magic number: 0xaadd
-
-XXX data records of 16 bytes, each.
-
-Record format:
-
-Pos | Bytes | Content  | Type  | Comment
-----|-------|----------|-------|----------------------
-0   | 1     | 0x00     | –     | reserved
-1   | 1     | year     | BCD   | date: year, 2 digits
-2   | 1     | weekday  | BCD   | date: weekday [1, 7]
-3   | 1     | month    | BCD   | date: month
-4   | 1     | day      | BCD   | date: day
-5   | 1     | hour     | BCD   | time: hours
-6   | 1     | minute   | BCD   | time: minutes
-7   | 1     | second   | BCD   | time: seconds
-8   | 2     | value    | ?     | Measured value real?
-10  | 2     | value    | ?     | Measured value data?
-12  | 1     | stat0    | bin   | Status byte 0        
-13  | 1     | stat1    | bin   | Status byte 1
-14  | 1     | mem no   |       | ?
-15  | 1     | read no  |       | ?
-
 
 
 ### Logger data
