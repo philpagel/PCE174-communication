@@ -7,11 +7,13 @@ A tool to communicate with a PCE-174 lightmeter/logger
 
 # todo
 #   - implement get-logger-data
-#   - implement get-timing
 #   - what is memload? is this a usefull name?
+#   - what is read_no in live data?
 #   - find out how to send simultaneous key presses (if possible)
 #   - find out if we can set date, time and sampling interval through a command
 #   - maybe round output or asseble values in BCD to avoid funny numrical artifacts?
+#   - try: does the instrument sen ACK after commands? or error codes?
+#   - detect unknown commands and warn
 #   - test, test, test
 
 
@@ -54,9 +56,10 @@ def main():
             elif args.format == "hex":
                 sys.stdout.buffer.write(binascii.hexlify(blob))
             elif args.format == "csv":
-                print(decode_blob(blob))
+                print(decode_blob(args.command, blob))
         iface.close()
-
+    else:
+        sys.exit("Unknown command")
 
 def getargs():
     "Return commandline options and arguments"
@@ -90,21 +93,16 @@ def bcd2int(dat):
     return(ret)
 
 
-def decode_blob(blob):
+def decode_blob(cmd, blob):
     "return decoded data"
 
     ret = None
-    cmdid = blob[:2]
-    blob = blob[2:]
-
-    if cmdid == b"\xbb\x88":
-        ret = decode_saved_data(blob)
-    elif cmdid == b"\xaa\xdd":
+    if cmd == "get-live-data":
         ret = decode_live_data(blob)
-    elif cmdid == b"\xaa\xcc":
+    elif cmd == "get-saved-data":
+        ret = decode_saved_data(blob)
+    elif cmd == "get-logger-data":
         ret = decode_logger_data(blob)
-    elif cmdid == b"\xaa\x56":
-        ret = decode_logger_session(blob)
     else:
         raise Exception('Unknown command ID in received data')
 
@@ -112,9 +110,10 @@ def decode_blob(blob):
 
 
 def decode_live_data(blob):
-    "Decode live data binar blob to csv"
+    "Decode live data to csv"
 
     Live_data = Struct(
+            'magic' / Const(b'\xaa\xdd'),
             Padding(1),
             'year'    / Int8ub,
             'weekday' / Int8ub,
@@ -123,8 +122,8 @@ def decode_live_data(blob):
             'hour'    / Int8ub,
             'minute'  / Int8ub,
             'second'  / Int8ub,
-            'dat0H'    / Int8ub,
-            'dat0L'    / Int8ub,
+            'dat0H'   / Int8ub,
+            'dat0L'   / Int8ub,
             'dat1H'   / Int8ub,
             'dat1L'   / Int8ub,
             'stat0'   / Int8ub,
@@ -172,10 +171,11 @@ def decode_live_data(blob):
 
 
 def decode_saved_data(blob):
-    "Decode the stored_data binary blob to CSV"
+    "Decode stored-data to CSV"
 
     record = Struct(
             'foo'   / Int8ub, # should be 0x00 but isn't always
+            #'magic' / Const(b'\x00'),
             'year'  / Int8ub,
             'week'  / Int8ub,
             'month' / Int8ub,
@@ -189,15 +189,19 @@ def decode_saved_data(blob):
             'stat0' / Int8ub,
             'stat1' / Int8ub
            )
+
+    db = Struct(
+            'magic' / Const(b'\xbb\x88'),
+            'data'  / Array(99, record)
+            )
     
-    db = GreedyRange(record)
     dat = db.parse(blob)
 
     # define columns and assemble header
     cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload')
     ret = [", ".join(cols)]
 
-    for rec in dat:
+    for rec in dat['data']:
         # bcd decoding
         for key in ['year', 'week', 'month', 'day', 'hour', 'minute', 'second']:
             rec[key] = bcd2int(rec[key])
@@ -229,38 +233,42 @@ def decode_saved_data(blob):
 
 
 def decode_logger_data(blob):
-    "Decode the logger_data binary blob to csv"
-    # FIXME
-
-    logger_buffer = Struct(
-            'groups'     / Int8ub,
-            'buffersize' / Int16ub
-            )
-    ret = logger_buffer.parse(blob)
+    "Decode logger_data to csv"
 
 
-def decode_logger_session(blob):
-    "Decode the logger_session data binary blob to csv"
-    # FIXME
-
-    logger_session = Struct(
-            'group'     / Int8ub('group'),
-            'sampling'  / Int8ub('sampling'),
-            Padding(1),
-            'year'      / Int8ub('year'),
-            'week'      / Int8ub('week'),
-            'month'     / Int8ub('month'),
-            'day'       / Int8ub('day'),
-            'hour'      / Int8ub('hour'),
-            'minute'    / Int8ub('minute'),
-            'second'    / Int8ub('second'),
-            'datH'      / Int8ub('second'),
-            'datL'      / Int8ub('second'),
-            'stat0'     / Int8ub('stat0')
+    Datapoint = Struct(
+            'datH'  / Int8ub,
+            'datL'  / Int8ub,
+            'stat0' / Int8ub
             )
 
-    ret = logger_session.parse(blob)
+    Record = Struct(
+            'magic'     / Const(b'\xaa\x56'),
+            'recno'     / Int8ub,
+            'sampling'  / Int8ub,
+            'reserved'  / Const(b'\x00\x00'),
+            'year'      / Int8ub,
+            'weekday'   / Int8ub,
+            'month'     / Int8ub,
+            'day'       / Int8ub,
+            'hour'      / Int8ub,
+            'minute'    / Int8ub,
+            'second'    / Int8ub,
+            'data'      / Array(this.recno, Datapoint) # this is not right - but what is?
+            )
 
+    db = Struct(
+            'magic'   / Const(b'\xaa\xcc'),
+            'groups'  / Int8ub,
+            'bufsize' / Int16ub,
+            #'data'    / Array(this.groups, Record)
+            'data'    / Record
+            )
+    # XXX Hm - how do I know how many data points are in a record?
+
+    dat = db.parse(blob)
+
+    return(dat)
 
 
 def decode_stat0(byte):
@@ -346,126 +354,119 @@ def decode_stat1(byte):
 
 # command definition
 cmd = OrderedDict([
-        ('units' , { 
-            'cmd' : b"\xfe",		# command byte
-            'ret' : False,		# will data be returned?
-            'key' : 'UNITS',            # Equivalent key press
-            'desc': "Toggle units between lux and fc"	# description
-            }
+    ('units', { 
+        'cmd' : b"\xfe",		# command byte
+        'ret' : False,		# will data be returned?
+        'key' : 'UNITS',            # Equivalent key press
+        'desc': "Toggle units between lux and fc"	# description
+        }
         ),
-        ('light' , { 
-            'cmd' : b"\xfd", 
-            'ret' : False,
-            'key' : 'Light/LOAD',
-            'desc': "Toggle backlight"
-            }
+    ('light', { 
+        'cmd' : b"\xfd", 
+        'ret' : False,
+        'key' : 'Light/LOAD',
+        'desc': "Toggle backlight"
+        }
         ),
-        ('range' , { 
-            'cmd' : b"\x7f", 
-            'ret' : False,
-            'key' : 'RANGE/APO',
-            'desc': "Cycle through measurement ranges"
-            }
+    ('range', { 
+        'cmd' : b"\x7f", 
+        'ret' : False,
+        'key' : 'RANGE/APO',
+        'desc': "Cycle through measurement ranges"
+        }
         ),
-        ('save' , { 
-            'cmd' : b"\xfb", 
-            'ret' : False,
-            'key' : 'REC/Setup',
-            'desc': "Save reading to memory"
-            }
+    ('save', { 
+        'cmd' : b"\xfb", 
+        'ret' : False,
+        'key' : 'REC/Setup',
+        'desc': "Save reading to memory"
+        }
         ),
-        ('peak' , { 
-            'cmd' : b"\xf7", 
-            'ret' : False,
-            'key' : 'PEAK/LEFT',
-            'desc': "Toggle peak value display"
-            }
+    ('peak', { 
+        'cmd' : b"\xf7", 
+        'ret' : False,
+        'key' : 'PEAK/LEFT',
+        'desc': "Toggle peak value display"
+        }
         ),
-        ('rel' , { 
-            'cmd' : b"\xdf", 
-            'ret' : False,
-            'key' : 'REL/RIGHT',
-            'desc': "Toggle realtive reading"
-            }
+    ('rel', { 
+        'cmd' : b"\xdf", 
+        'ret' : False,
+        'key' : 'REL/RIGHT',
+        'desc': "Toggle realtive reading"
+        }
         ),
-        ('minmax' , { 
-            'cmd' : b"\xbf", 
-            'ret' : False,
-            'key' : 'MAX/MIN/UP',
-            'desc': "Toggle Min/Max/current value display "
-            }
+    ('minmax', { 
+        'cmd' : b"\xbf", 
+        'ret' : False,
+        'key' : 'MAX/MIN/UP',
+        'desc': "Toggle Min/Max/current value display "
+        }
         ),
-        ('hold' , { 
-            'cmd' : b"\xef", 
-            'ret' : False,
-            'key' : 'HOLD/DOWN',
-            'desc': "Toggle hold"
-            }
+    ('hold', { 
+        'cmd' : b"\xef", 
+        'ret' : False,
+        'key' : 'HOLD/DOWN',
+        'desc': "Toggle hold"
+        }
         ),
-        ('off' , { 
-            'cmd' : b"\xf3", 
-            'ret' : False,
-            'key' : 'POWER',
-            'desc': "Turn off the instrument"
-            }
+    ('off', { 
+        'cmd' : b"\xf3", 
+        'ret' : False,
+        'key' : 'POWER',
+        'desc': "Turn off the instrument"
+        }
         ),
-        ('logging' , { 
-            'cmd' : b"\xdc", 
-            'ret' : False,
-            'key' : 'REC-hold',
-            'desc': "Start/stop data logging"
-            }
+    ('logging', { 
+        'cmd' : b"\xdc", 
+        'ret' : False,
+        'key' : 'REC-hold',
+        'desc': "Start/stop data logging"
+        }
         ),
-        ('prevview' , { 
-            'cmd' : b"\xda", 
-            'ret' : False,
-            'key' : 'PEAK-hold',
-            'desc': "Switch to previous display view mode"
-            }
+    ('prevview', { 
+        'cmd' : b"\xda", 
+        'ret' : False,
+        'key' : 'PEAK-hold',
+        'desc': "Switch to previous display view mode"
+        }
         ),
-        ('nextview' , { 
-            'cmd' : b"\xdb", 
-            'ret' : False,
-            'key' : 'REL-hold',
-            'desc': "Switch to next display view mode"
-            }
+    ('nextview', { 
+        'cmd' : b"\xdb", 
+        'ret' : False,
+        'key' : 'REL-hold',
+        'desc': "Switch to next display view mode"
+        }
         ),
-        ('viewsaved' , { 
-            'cmd' : b"\xde", 
-            'ret' : False,
-            'key' : 'LIGHT/LOAD-hold',
-            'desc': "Toggle view mode for saved data"
-            }
+    ('viewsaved', { 
+        'cmd' : b"\xde", 
+        'ret' : False,
+        'key' : 'LIGHT/LOAD-hold',
+        'desc': "Toggle view mode for saved data"
+        }
         ),
-        ('get-live-data' , { 
-            'cmd' : b"\x11", 
-            'ret' : True,
-            'key' : None,
-            'desc': "Read live data."
-            },
+    ('get-live-data', { 
+        'cmd' : b"\x11", 
+        'ret' : True,
+        'key' : None,
+        'desc': "Read live data."
+        },
         ),
-        ('get-saved-data' , { 
-            'cmd' : b"\x12", 
-            'ret' : True,
-            'key' : None,
-            'desc': "Read manually saved data"
-            }
+    ('get-saved-data', { 
+        'cmd' : b"\x12", 
+        'ret' : True,
+        'key' : None,
+        'desc': "Read manually saved data"
+        }
+        ),
+    ('get-logger-data', { 
+        'cmd' : b"\x13", 
+        'ret' : True,
+        'key' : None,
+        'desc': "Read logger data"
+        },
         )
-# FIXME
-# these are not yet functional:
-#        'get-logger-data' : { 
-#            'cmd' : b"\x13", 
-#            'ret' : True,
-#            'key' : ,
-#            'desc': "Read logger data"
-#            },
-#        'get-data-protocol' : { 
-#            'cmd' : b"\x14", 
-#            'ret' : True,
-#            'key' : ,
-#            'desc': "Data logger data transmit protocol"
-#            }
-        ])
+    ])
 
 
 if __name__ == "__main__":

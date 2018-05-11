@@ -14,9 +14,7 @@ See `protocol.md` for a detailed description of the communication protocol.
 ## Status
 
 Currently, the script can send control commands and read both live-data and the
-storage of manually aved data from the instrument.
-
-Reading timing data and logger memory does not work, yet.
+storage of manually saved data from the instrument.
 
 Known issues:
 

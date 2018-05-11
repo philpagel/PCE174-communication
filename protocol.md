@@ -162,43 +162,44 @@ Command: get-logger-data (0x13)
 
 Magic number: 0xaacc
 
-XXX data records of 3 bytes, each.
+#### Header
 
-Record format:
+3 bytes
 
 Pos |Bytes |  Content  | Type    | Comment
-----|------|-----------|---------|----------------------
-0   |1     |  group    | UInt8   | ?
-1   |2     |  bufsize  | ULInt16 | ?
+----|------|-----------|---------|-------------------------------
+0   |1     |  groups   | Uchar   | No. of logging groups
+1   |2     |  bufsize  | UInt16  | Size of logging buffer [bytes]
+
+Followed by `groups` loggin records.
 
 
-
-### Protocol transmission data
-
-Command: get-stored-data (0x14)
+#### Logging record 
 
 Magic number: 0xaa56
 
-Record format:
+Header of 9 bytes:
 
 Pos | Bytes |  Content  | Type  | Comment
-----|-------|-----------|-------|----------------------
-0   | 1     |  group    | BCD   | 
+----|-------|-----------|-------|------------------------
+0   | 1     |  recno    | BCD   | number of this record
 1   | 1     |  sampling | BCD   | sampling interval [s] 
 2   | 1     |  0x00     | –     | reserved
-3   | 1     |  year     | BCD   | date: year 
-4   | 1     |  weekday  | BCD   | date: weekday [1,7]
-5   | 1     |  month    | BCD   | date: month
-6   | 1     |  day      | BCD   | date: day
-7   | 1     |  hour     | BCD   | time: hour
-8   | 1     |  minute   | BCD   | time: minute
-9   | 1     |  second   | BCD   | time: second
-10  | 3     |  Data1    | data  | 1. data record
-13  | 3     |  Data2    | data  | 2. data record
-16  | 3     |  ...      | data  | ...
+3   | 1     |  0x00     | –     | reserved
+4   | 1     |  year     | BCD   | date: year 
+5   | 1     |  weekday  | BCD   | date: weekday [1,7]
+6   | 1     |  month    | BCD   | date: month
+7   | 1     |  day      | BCD   | date: day
+8   | 1     |  hour     | BCD   | time: hour
+9   | 1     |  minute   | BCD   | time: minute
+10  | 1     |  second   | BCD   | time: second
+
+Followed by an unknown number of data-point records.
 
 
-Data record format:
+#### logging datapoint record
+
+Magix number: None
 
 Pos | Bytes |  Content  | Type  | Comment
 ----|-------|-----------|-------|----------------------
