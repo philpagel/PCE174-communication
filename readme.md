@@ -13,8 +13,8 @@ See `protocol.md` for a detailed description of the communication protocol.
 
 ## Status
 
-Currently, the script can send control commands and read manually stored data
-from the instrument.
+Currently, the script can send control commands and read both live-data and the
+storage of manually aved data from the instrument.
 
 Reading timing data and logger memory does not work, yet.
 
@@ -24,10 +24,8 @@ Known issues:
   out I may change the name so reflect its meaning. I'll leave that to a later
   release.
 * Reading logger data is not implemented, yet.
-* Reading timing data is not implemented, yet.
-* I have tested the features that are implemented, but not extensively.  So
-  it's time to get an alpha version out there. Feedback/bug reports are
-  welcome.
+* I have tested the features that are implemented, but not extensively.
+  Feedback/bug reports are welcome.
 
 
 ## Compatibility
@@ -95,11 +93,14 @@ like this:
       -l, --list        List all available commands
       -i INTERFACE      interface to connect to (/dev/ttyUSB0)
       -b BAUD           baudrate (9600)
+      -t TIMEOUT        serial communication timeout [s] (3)
       -f {csv,raw,hex}  return data in the specified format (csv)
 
 Typically you can stick to the defaults, maybe with the exception of the
 interface specification (in case `/dev/ttyUSB0` is not what you need, certainly
-under Windows).
+under Windows). In my hands, the default TIMEOUT is enough for reading saved
+data.  For live data 0.3s work for me. If timeout is too short, you will get
+truncated data.
 
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
@@ -159,10 +160,61 @@ key presses on the instrument. See *Button* entry for this information.
           Toggle view mode for saved data
           Button: LIGHT/LOAD-hold
 
+      get-live-data
+          Read live data.
+          Button: None
+          Returns data in the specified format (-f)
+
       get-saved-data
           Read manually saved data
           Button: None
           Returns data in the specified format (-f)
+
+
+## get-live-data
+
+This command reads live data from the instrument. I.e. the current readings.
+This can be used for single readings or automated logging from a computer
+without using the logging feature of the instrument.  By default, the command
+returns comma separated data (CSV) to `STDOUT`.  Example:
+
+    date, time, value, relvalue, unit, range, mode, hold, APO, power, dispmode, memload, mem_no, read_no
+    2007-08-15, 23:49:58, 21.1, 21.1, lux, 400, normal, cont, on, ok, time, mem, 27, 12
+
+The first row contains table headers with the following meaning:
+
+Column    | Description
+----------|-----------------------------------------------
+date      | Date in ISO-8601 format (YYYY-MM-DD)
+time      | Time (HH:MM:SS)
+value     | Numerical value of reading
+rawvalue  | raw numerical value 
+unit      | Unit of measurement (lux/fc)
+range     | Measurement range used (40, 400, ... 4000k)
+mode      | normal/Pmin/Pmax/min/max/rel 
+hold      | Was hold active? (hold/cont)
+APO       | Auto-power-off (on/off)
+power     | Power status (ok/low)
+dispmode  | Active display mode (time/day/sampling/year)
+memload   | No idea what this is (0/1/2). Name may change in the future.
+mem_no    | Number of manually saved records in memory. (See get-saved-data)
+read_no   | ?
+
+In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
+`rawvalue` contains the absolute reading (that would be measured with out *rel*
+mode) and `value` is the relative reading as displayed on the screen.
+
+In raw mode (`-f raw`), a binary blob is written to `STDOUT`. This may be useful
+for debugging or if you want to deal with the data yourself.
+
+Hex mode (`-f hex`) is similar to raw mode but encodes the raw blob in
+hexadecimal.  Again – useful for debugging.
+
+The script ignores the `weekday` field in the data, because it has a few
+issues: The weekday is set and returned as a number (1-7) and manually set –
+i.e. the instrument does not try to ensure that the weekday entry matches the
+date. In order to avoid confusion, I decided to ignore the weekday. If you need
+the weekday, better compute it from the date.
 
 
 ## get-saved-data
@@ -190,21 +242,11 @@ range     | Measurement range used (40, 400, ... 4000k)
 mode      | normal/Pmin/Pmax/min/max/rel 
 hold      | Was hold active? (hold/cont)
 APO       | Auto-power-off (on/off)
-power     | Power status (normal/low)
+power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
 memload   | No idea what this is (0/1/2). Name may change in the future.
 
-In raw mode (`-f raw`), a binary blob is written to `STDOUT`. This may be useful
-for debugging or if you want to deal with the data yourself.
-
-Hex mode (`-f hex`) is similar to raw mode but encodes the raw blob in
-hexadecimal.  Again – useful for debugging.
-
-The script ignores the `weekday` field in the data, because it has a few
-issues: The weekday is set and returned as a number (1-7) and manually set –
-i.e. the instrument does not try to ensure that the weekday entry matches the
-date. In order to avoid confusion, I decided to ignore the weekday. If you need
-the weekday, better compute it from the date.
+See get-live-data for details oin other formats and weekday handling.
 
 
 # Some useful things from the manual

@@ -6,9 +6,9 @@ A tool to communicate with a PCE-174 lightmeter/logger
 """
 
 # todo
-#   - what is memload? is this a usefull name?
 #   - implement get-logger-data
 #   - implement get-timing
+#   - what is memload? is this a usefull name?
 #   - find out how to send simultaneous key presses (if possible)
 #   - find out if we can set date, time and sampling interval through a command
 #   - maybe round output or asseble values in BCD to avoid funny numrical artifacts?
@@ -40,7 +40,7 @@ def main():
             print()
     elif args.command in cmd:
         try:
-            iface = serial.Serial(args.interface, args.baud, timeout=5)
+            iface = serial.Serial(args.interface, args.baud, timeout=args.timeout)
         except:
             sys.exit("Unable to connect to device.") 
 
@@ -63,9 +63,10 @@ def getargs():
 
     parser = argparse.ArgumentParser(description="Talk to a PCE-174 lightmeter/logger")
 
-    parser.add_argument('-l', '--list', dest='list', action='store_true', help="List all available commands")
+    parser.add_argument('-l', '--list', dest='list', action='store_true', help="list all available commands")
     parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to (/dev/ttyUSB0)")
     parser.add_argument('-b', dest="baud", type=int, default=9600, help="baudrate (9600)")
+    parser.add_argument('-t', dest="timeout", type=float, default=3, help="serial communication timeout [s] (3)")
     parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv','raw','hex'], 
             help="return data in the specified format (csv)"
             )
@@ -99,7 +100,7 @@ def decode_blob(blob):
     if cmdid == b"\xbb\x88":
         ret = decode_saved_data(blob)
     elif cmdid == b"\xaa\xdd":
-        ret = decode_timing_data(blob)
+        ret = decode_live_data(blob)
     elif cmdid == b"\xaa\xcc":
         ret = decode_logger_data(blob)
     elif cmdid == b"\xaa\x56":
@@ -108,6 +109,66 @@ def decode_blob(blob):
         raise Exception('Unknown command ID in received data')
 
     return(ret)
+
+
+def decode_live_data(blob):
+    "Decode live data binar blob to csv"
+
+    Live_data = Struct(
+            Padding(1),
+            'year'    / Int8ub,
+            'weekday' / Int8ub,
+            'month'   / Int8ub,
+            'day'     / Int8ub,
+            'hour'    / Int8ub,
+            'minute'  / Int8ub,
+            'second'  / Int8ub,
+            'dat0H'    / Int8ub,
+            'dat0L'    / Int8ub,
+            'dat1H'   / Int8ub,
+            'dat1L'   / Int8ub,
+            'stat0'   / Int8ub,
+            'stat1'   / Int8ub,
+            'mem_no'  / Int8ub,
+            'read_no' / Int8ub
+            )
+
+    rec = Live_data.parse(blob)
+
+    # define columns and assemble header
+    cols = ('date', 'time', 'value', 'rawvalue', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload', 'mem_no', 'read_no')
+    ret = [", ".join(cols)]
+
+    # bcd decoding
+    for key in ['year', 'weekday', 'month', 'day', 'hour', 'minute', 'second']:
+        rec[key] = bcd2int(rec[key])
+
+    stat0 = decode_stat0(rec['stat0'])
+    stat1 = decode_stat1(rec['stat1'])
+
+    # reassemble the record in a more practical format
+    rec = {
+            'date'     : "20%2.2i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
+            'time'     : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
+            'value'    : stat1['sign'] * (100*rec['dat1H'] + rec['dat1L']) * stat0['Frange'],
+            'rawvalue' : (100*rec['dat0H'] + rec['dat0L']) * stat0['Frange'],
+            'APO'      : stat0['APO'],
+            'hold'     : stat0['hold'],
+            'unit'     : stat0['unit'],
+            'range'    : stat0['range'],
+            'mode'     : stat0['mode'],
+            'power'    : stat1['power'],
+            'dispmode' : stat1['dispmode'],
+            'memload'  : stat1['memload'],
+            'mem_no'   : rec['mem_no'],
+            'read_no'  : rec['read_no']
+            }
+
+    # turn rec into a comma separated row
+    ret.append(", ".join(([str(rec[col]) for col in cols])))
+
+    #return(ret)
+    return("\n".join(ret))
 
 
 def decode_saved_data(blob):
@@ -132,15 +193,6 @@ def decode_saved_data(blob):
     db = GreedyRange(record)
     dat = db.parse(blob)
 
-    # factor to set decimal point depending on range
-    Flevel = {
-            '40'   : 0.01,
-            '400'  : 0.1,
-            '4k'   : 1.0,
-            '40k'  : 10,
-            '400k' : 100
-            }
-
     # define columns and assemble header
     cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload')
     ret = [", ".join(cols)]
@@ -158,7 +210,7 @@ def decode_saved_data(blob):
                 'pos'      : rec['pos'],
                 'date'     : "20%2.2i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
                 'time'     : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
-                'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * Flevel[stat0['range']],
+                'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
                 'APO'      : stat0['APO'],
                 'hold'     : stat0['hold'],
                 'unit'     : stat0['unit'],
@@ -210,28 +262,6 @@ def decode_logger_session(blob):
     ret = logger_session.parse(blob)
 
 
-def decode_timing_data(blob):
-    "Decode the timing binary blob to csv"
-    # FIXME
-
-    timing_data = Struct(
-            Padding(1),
-            'year'    / Int8ub,
-            'week'    / Int8ub,
-            'month'   / Int8ub,
-            'day'     / Int8ub,
-            'hour'    / Int8ub,
-            'minute'  / Int8ub,
-            'second'  / Int8ub,
-            'datH'    / Int8ub,
-            'datL'    / Int8ub,
-            'stat0'   / Int8ub,
-            'stat1'   / Int8ub,
-            'mem_no'  / Int8ub,
-            'read_no' / Int8ub
-            )
-    ret = timing_data.parse(blob)
-
 
 def decode_stat0(byte):
     "return a dict from stat0 byte data"
@@ -260,12 +290,22 @@ def decode_stat0(byte):
             0b110 : 'rel'
             }
 
+    # factor to set decimal point depending on range
+    Frange = {
+            '40'   : 0.01,
+            '400'  : 0.1,
+            '4k'   : 1.0,
+            '40k'  : 10,
+            '400k' : 100
+            }
+
     ret['unit'] = ('lux', 'fc')[ret['unit']]
     ret['range'] = Range[ret['unit']][ret['range']]
     ret['APO'] = ('on', 'off')[ret['APO']]
     ret['mode'] = mode[ret['mode']]
     ret['hold'] = ('cont', 'hold')[ret['hold']]
-    
+    ret['Frange'] = Frange[ret['range']]
+
     return(ret)
 
 
@@ -397,6 +437,13 @@ cmd = OrderedDict([
             'desc': "Toggle view mode for saved data"
             }
         ),
+        ('get-live-data' , { 
+            'cmd' : b"\x11", 
+            'ret' : True,
+            'key' : None,
+            'desc': "Read live data."
+            },
+        ),
         ('get-saved-data' , { 
             'cmd' : b"\x12", 
             'ret' : True,
@@ -406,12 +453,6 @@ cmd = OrderedDict([
         )
 # FIXME
 # these are not yet functional:
-#        'get-timing' : { 
-#            'cmd' : b"\x11", 
-#            'ret' : True,
-#            'key' : ,
-#            'desc': "Timing data transmit"
-#            },
 #        'get-logger-data' : { 
 #            'cmd' : b"\x13", 
 #            'ret' : True,
