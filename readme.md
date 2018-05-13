@@ -13,19 +13,31 @@ See `protocol.md` for a detailed description of the communication protocol.
 
 ## Status
 
-Currently, the script can send control commands and read both live-data and the
-storage of manually aved data from the instrument.
+Currently, the script can send control commands and read live-data, the storage
+of manually saved data from the instrument and logging data. I.e. all
+functionality that can be derived from the manufacturer protocol docs has been
+implemented. It is possible, however, that there are undocumented functions.
 
-Reading timing data and logger memory does not work, yet.
+I have carried out some testing of all functions but not extensively, so I'm
+sure there still are relevant bugs. Therefore, this is not production ready but
+should be considered "beta".
+
+Feedback/bug reports are welcome.
 
 Known issues:
 
+* The data logger records do not contain a sign, so values are always positive.
+  it is possilbe to start loggiun iun rel mode so negative valeus are displayed
+  during a seesion when light intensity drops below the reference value but
+  this is not relfected in the logged data. At this point I am not shire if the
+  instrument loggs rel values or rawvalues in this case. 
 * I am not quite sure what `memload` from the `Stat0` byte does. Once I find
   out I may change the name so reflect its meaning. I'll leave that to a later
   release.
-* Reading logger data is not implemented, yet.
-* I have tested the features that are implemented, but not extensively.
-  Feedback/bug reports are welcome.
+* Sometimes the instrument stores invalid data like seconds > 59. This causes
+  data processing to fail. You can still use raw, hex or construct format but
+  repr and csv do not work in those cases...
+  This is a bug in the instruments firmware - there is nothing I can do about it.
 
 
 ## Compatibility
@@ -81,20 +93,28 @@ If it is not provided by your distribution just install a local version:
 To communicate with the light meter connect through USB and run the command
 like this:
 
-    usage: pce174 [-h] [-l] [-i INTERFACE] [-b BAUD] [-f {csv,raw,hex}] [command]
+    usage: pce174 [-h] [-l] [-i INTERFACE] [-b BAUD] [-B {8,7,6,5}]
+                  [-p {N,E,O,M,S}] [-S {1,1.5,0}] [-t TIMEOUT]
+                  [-f {csv,repr,construct,raw,hex}] [-s SEP]
+                  [command]
 
     Talk to a PCE-174 lightmeter/logger
 
     positional arguments:
-      command           command to send to instrument
+      command               command to send to instrument
 
     optional arguments:
-      -h, --help        show this help message and exit
-      -l, --list        List all available commands
-      -i INTERFACE      interface to connect to (/dev/ttyUSB0)
-      -b BAUD           baudrate (9600)
-      -t TIMEOUT        serial communication timeout [s] (3)
-      -f {csv,raw,hex}  return data in the specified format (csv)
+      -h, --help            show this help message and exit
+      -l, --list            list all available commands
+      -i INTERFACE          interface to connect to (/dev/ttyUSB0)
+      -b BAUD               baudrate (9600)
+      -B {8,7,6,5}          byte size (8)
+      -p {N,E,O,M,S}        parity (N)
+      -S {1,1.5,0}          stopbits (1)
+      -t TIMEOUT            serial communication timeout [s] (5)
+      -f {csv,repr,construct,raw,hex}
+                            specify output format (csv)
+      -s SEP, --sep SEP     separator for csv (',')
 
 Typically you can stick to the defaults, maybe with the exception of the
 interface specification (in case `/dev/ttyUSB0` is not what you need, certainly
@@ -161,14 +181,56 @@ key presses on the instrument. See *Button* entry for this information.
           Button: LIGHT/LOAD-hold
 
       get-live-data
-          Read live data.
+          Read live data
           Button: None
           Returns data in the specified format (-f)
 
       get-saved-data
-          Read manually saved data
+          Read manually saved data (from the 99 registers)
           Button: None
           Returns data in the specified format (-f)
+
+      get-logger-data
+          Read logger data
+          Button: None
+          Returns data in the specified format (-f)
+
+
+## Data formats
+
+Through the -f option you can choose from several oiutput format options:
+
+### csv
+
+This is the most useful format for most purposes, as it can easily be imported
+into other software.  The firs row is the header declaring the column names.
+The field separator is a comma (`','`) by default and can be chosen with the
+`-s` option Lines are separated by a single newline character (`\n`).
+
+
+### repr
+
+This format is the python prepresentation of the data. It is mostly useful fro
+debugging and possibly for us in pother python programs although in the latter
+cse its probably better to impirt the script as amodule and use the data
+directly as it is returned from the parse-XXX-data or process-XXX-data
+functions.
+
+
+### construct
+
+This is the the container representation of the construct library. For
+debugging, only.
+
+
+### raw
+
+This format simply writes the binary blog to `STDOUT` as it is received from the instrument.
+
+
+### hex
+
+Similar to raw but transcribed to hex representation.
 
 
 ## get-live-data
@@ -201,14 +263,8 @@ mem_no    | Number of manually saved records in memory. (See get-saved-data)
 read_no   | ?
 
 In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
-`rawvalue` contains the absolute reading (that would be measured with out *rel*
+`rawvalue` contains the absolute reading (that would be measured without *rel*
 mode) and `value` is the relative reading as displayed on the screen.
-
-In raw mode (`-f raw`), a binary blob is written to `STDOUT`. This may be useful
-for debugging or if you want to deal with the data yourself.
-
-Hex mode (`-f hex`) is similar to raw mode but encodes the raw blob in
-hexadecimal.  Again – useful for debugging.
 
 The script ignores the `weekday` field in the data, because it has a few
 issues: The weekday is set and returned as a number (1-7) and manually set –
@@ -246,7 +302,7 @@ power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
 memload   | No idea what this is (0/1/2). Name may change in the future.
 
-See get-live-data for details oin other formats and weekday handling.
+See get-live-data for details on other formats and weekday handling.
 
 
 # Some useful things from the manual
