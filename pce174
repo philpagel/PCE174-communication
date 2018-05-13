@@ -6,10 +6,9 @@ A tool to communicate with a PCE-174 lightmeter/logger
 """
 
 # todo
-#   - for logger data: increemtn time (and date) according to loggin interval
-#   - what hapens if loggi in rel mode: negative values?
-#   - move some processing to the parser: e.g. value assembly and bcd decoding
-#   - what is memload? is this a usefull name?
+#   - what hapens if logging in rel mode: negative values?
+#   - implement parsing/processing data from files? Woul;d be nice for debuggin or stored raw data
+#   - what is memload? is this a usefull name
 #   - what is read_no in live data?
 #   - find out how to send simultaneous key presses (if possible)
 #   - find out if we can set date, time and sampling interval through a command
@@ -23,6 +22,7 @@ import sys, argparse
 import serial
 import warnings
 import binascii
+from datetime import *
 from collections import OrderedDict
 # requires construct ≥ 2.8 (tested with 2.9)
 from construct import * 
@@ -55,21 +55,32 @@ def main():
         except:
             sys.exit("Unable to connect to device.") 
 
-        hello = b"\x87\x83"	# command prefix
-        msg = hello + cmd[args.command]['cmd']
-        iface.write(msg)
+        blob = send_command(iface, args.command)
+        iface.close()
 
         if cmd[args.command]['ret']: # read data
-            blob = iface.read(100000)
             if args.format == "raw":
                 sys.stdout.buffer.write(blob)
             elif args.format == "hex":
                 sys.stdout.buffer.write(binascii.hexlify(blob))
-            elif args.format == "csv":
+            elif args.format in ("csv", "repr", "construct"):
                 print(decode_blob(args.command, blob))
-        iface.close()
     else:
         sys.exit("Unknown command")
+
+
+def send_command(iface, command):
+    "Send command to instrument"
+
+    hello = b"\x87\x83"	# command prefix
+    msg = hello + cmd[args.command]['cmd']
+    iface.write(msg)
+    
+    blob = b''
+    if cmd[command]['ret']:
+        blob = iface.read(100000)
+
+    return(blob)
 
 
 def getargs():
@@ -84,7 +95,7 @@ def getargs():
     parser.add_argument('-p', dest="parity", type=str, default='N', choices =['N', 'E', 'O', 'M', 'S'], help="parity (N)")
     parser.add_argument('-S', dest="stopbits", type=float, default=1, choices=[1, 1.5, 0], help="stopbits (1)")
     parser.add_argument('-t', dest="timeout", type=float, default=5, help="serial communication timeout [s] (5)")
-    parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv', 'construct', 'raw','hex'], help="specify output format (csv)")
+    parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv', 'repr', 'construct', 'raw', 'hex'], help="specify output format (csv)")
     parser.add_argument('-s', '--sep', dest="sep", type=str, default=",", help="separator for csv (',')") 
     parser.add_argument('command', nargs='?', type=str, help="command to send to instrument")
 
@@ -112,16 +123,22 @@ def decode_blob(cmd, blob):
     ret = None
     if cmd == "get-live-data":
         ret = parse_live_data(blob)
-        ret = process_live_data(ret)
-        ret = live_data2csv(ret)
+        if args.format in ('csv', 'repr'):
+            ret = process_live_data(ret)
+        if args.format == ('csv'):
+            ret = live_data2csv(ret)
     elif cmd == "get-saved-data":
         ret = parse_saved_data(blob)
-        ret = process_saved_data(ret)
-        ret = saved_data2csv(ret)
+        if args.format in ('csv', 'repr'):
+            ret = process_saved_data(ret)
+        if args.format == ('csv'):
+            ret = saved_data2csv(ret)
     elif cmd == "get-logger-data":
         ret = parse_logger_data(blob)
-        ret = process_logger_data(ret)
-        ret = logger_data2csv(ret)
+        if args.format in ('csv', 'repr'):
+            ret = process_logger_data(ret)
+        if args.format == ('csv'):
+            ret = logger_data2csv(ret)
     else:
         raise Exception('Unknown command.')
 
@@ -244,6 +261,8 @@ def process_saved_data(dat):
 
     dat2 = []
     for rec in dat['data']:
+        if rec['pos'] == 0:
+            break
         # bcd decoding
         for key in ['year', 'week', 'month', 'day', 'hour', 'minute', 'second']:
             rec[key] = bcd2int(rec[key])
@@ -251,11 +270,13 @@ def process_saved_data(dat):
         stat0 = decode_stat0(rec['stat0'])
         stat1 = decode_stat1(rec['stat1'])
 
+        dtime = datetime(2000+rec['year'], rec['month'], rec['day'], rec['hour'], rec['minute'], rec['second'])
+
         # reassemble the record in a more practical format
         rec = {
                 'pos'      : rec['pos'],
-                'date'     : "20%2.2i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
-                'time'     : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
+                'date'      : dtime.date(),
+                'time'      : dtime.time(),
                 'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
                 'APO'      : stat0['APO'],
                 'hold'     : stat0['hold'],
@@ -330,7 +351,7 @@ def process_logger_data(dat):
     Each group is a list of data points. Datapoints are dicts with the following keys:
     
     groupno   : numerical id of the logging group
-    id        : measurement number within the group [1...]
+    id        : measurement number within the group [0,1, ...]
     sampling  : sampling interval [s]
     date      : YYYY-MM-DD
     time      : HH:MM:SS
@@ -349,6 +370,8 @@ def process_logger_data(dat):
         for key in ['year', 'weekday', 'month', 'day', 'hour', 'minute', 'second']:
             group[key] = bcd2int(group[key])
 
+        dtime = datetime(2000+group['year'], group['month'], group['day'], group['hour'], group['minute'], group['second'])
+
         for i, rec in enumerate(group['data']): 
 
             stat0 = decode_stat0(rec['stat0'])
@@ -358,8 +381,8 @@ def process_logger_data(dat):
                     'groupno'  : group['groupno'],
                     'id'       : i,
                     'sampling' : group['sampling'],
-                    'date'     : "20%2.2i-%2.2i-%2.2i" % (group['year'], group['month'], group['day']),
-                    'time'     : "%2.2i:%2.2i:%2.2i" % (group['hour'], group['minute'], group['second']),
+                    'date'      : dtime.date(),
+                    'time'      : dtime.time(),
                     #'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
                     'value'    : (100*rec['datH'] + rec['datL']) * stat0['Frange'],
                     'unit'     : stat0['unit'],
@@ -370,6 +393,7 @@ def process_logger_data(dat):
                     }
 
             logger.append(rec)
+            dtime += timedelta(seconds=group['sampling'])
 
     return(logger)
 
@@ -469,9 +493,9 @@ def decode_stat1(byte):
 # command definition
 cmd = OrderedDict([
     ('units', { 
-        'cmd' : b"\xfe",		# command byte
+        'cmd' : b"\xfe",	# command byte
         'ret' : False,		# will data be returned?
-        'key' : 'UNITS',            # Equivalent key press
+        'key' : 'UNITS',        # Equivalent key press
         'desc': "Toggle units between lux and fc"	# description
         }
         ),

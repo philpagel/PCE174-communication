@@ -57,7 +57,7 @@ Code | Command           | Description
 After receiving one of these commands, the instrument returns a binary blob
 that requires decoding. The structure of these blobs is described in the next
 section. The command `0x14` appears in the original documentation but seems to
-do nothing. The Data described for this command is actually part of the data
+do nothing. The data described for this command is actually part of the data
 structure returned by `0x13` so is most likely an error in the original docs.
 
 
@@ -89,17 +89,18 @@ Pos | Bytes | Content  | Type  | Comment
 5   | 1     | hour     | BCD   | time: hours
 6   | 1     | minute   | BCD   | time: minutes
 7   | 1     | second   | BCD   | time: seconds
-8   | 1     | absvalH  | Uchar | absolute value: higher 2 digits
-9   | 1     | absvalL  | Uchar | absolute value: lower 2 digits
-10  | 1     | relvalH  | Uchar | relative value: higher 2 digits
-11  | 1     | relvalL  | Uchar | relative value: lower 2 digits
+8   | 1     | valH     | Uchar | value: higher 2 digits
+9   | 1     | valL     | Uchar | value: lower 2 digits
+10  | 1     | rawvalH  | Uchar | raw value: higher 2 digits
+11  | 1     | rawvalL  | Uchar | raw value: lower 2 digits
 12  | 1     | stat0    | bin   | Status byte 0        
 13  | 1     | stat1    | bin   | Status byte 1
 14  | 1     | mem_no   | bin   | Number of saved data records
 15  | 1     | read_no  | bin   | ?
 
-In normal mode, abs and reval are identical. In rel mode, absval ist the raw
-reading.
+In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
+`rawvalue` contains the absolute reading (that would be measured without *rel*
+mode) and `value` is the relative reading as displayed on the screen.
 
 
 ### Manually stored data
@@ -170,13 +171,13 @@ Magic number: 0xaacc
 
 Pos |Bytes |  Content  | Type    | Comment
 ----|------|-----------|---------|-------------------------------
-0   |1     |  groups   | Uchar   | No. of logging groups
+0   |1     |  nogroups | Uchar   | No. of logging groups
 1   |2     |  bufsize  | UInt16  | Size of logging buffer [bytes]
 
-Followed by `groups` loggin records.
+Followed by `groups` logging records.
 
 
-#### Logging record 
+#### Logging group
 
 Magic number: 0xaa56
 
@@ -184,7 +185,7 @@ Header of 9 bytes:
 
 Pos | Bytes |  Content  | Type  | Comment
 ----|-------|-----------|-------|------------------------
-0   | 1     |  recno    | BCD   | number of this record
+0   | 1     |  groupno  | BCD   | number of this group
 1   | 1     |  sampling | BCD   | sampling interval [s] 
 2   | 1     |  0x00     | –     | reserved
 3   | 1     |  0x00     | –     | reserved
@@ -196,8 +197,8 @@ Pos | Bytes |  Content  | Type  | Comment
 9   | 1     |  minute   | BCD   | time: minute
 10  | 1     |  second   | BCD   | time: second
 
-Followed by an unknown number of data-point records.
-
+Followed by an unknown number of data-point records.  So we need to read until
+we hit the next magic numner for a logging group or EOF.
 
 #### logging datapoint record
 
@@ -209,8 +210,9 @@ Pos | Bytes |  Content  | Type  | Comment
 1   | 1     |  datL     | Uchar | value: lower 2 digits
 2   | 1     |  Stat0    | bin   | Stat0 byte
 
-See above (Manually stored data) for interpretation of datH and datL.
-
+See above (manually stored data) for interpretation of datH and datL.
+As no Stat1 byte is present, there is no `sign` value. It is unlcear how
+negative readings (in rel mode) should be handled.
 
 ## Status bytes
 
