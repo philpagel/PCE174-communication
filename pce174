@@ -6,14 +6,13 @@ A tool to communicate with a PCE-174 lightmeter/logger
 """
 
 # todo
-#   - implement get-logger-data
+#   - logger-data: how to know how many data points are in a group?
 #   - what is memload? is this a usefull name?
 #   - what is read_no in live data?
 #   - find out how to send simultaneous key presses (if possible)
 #   - find out if we can set date, time and sampling interval through a command
-#   - maybe round output or asseble values in BCD to avoid funny numrical artifacts?
-#   - try: does the instrument sen ACK after commands? or error codes?
-#   - detect unknown commands and warn
+#   - maybe round output or assemble values in BCD to avoid funny numerical artifacts?
+#   - Add some checks for data integrity/completeness?
 #   - test, test, test
 
 
@@ -24,7 +23,6 @@ import binascii
 from collections import OrderedDict
 # requires construct ≥ 2.8 (tested with 2.9)
 from construct import * 
-
 
 def main():
     "The main function - duh."
@@ -104,7 +102,7 @@ def decode_blob(cmd, blob):
     elif cmd == "get-logger-data":
         ret = decode_logger_data(blob)
     else:
-        raise Exception('Unknown command ID in received data')
+        raise Exception('Unknown command.')
 
     return(ret)
 
@@ -163,11 +161,11 @@ def decode_live_data(blob):
             'read_no'  : rec['read_no']
             }
 
-    # turn rec into a comma separated row
+    # turn into csv
     ret.append(", ".join(([str(rec[col]) for col in cols])))
+    ret = "\n".join(ret)
 
-    #return(ret)
-    return("\n".join(ret))
+    return(ret)
 
 
 def decode_saved_data(blob):
@@ -196,11 +194,8 @@ def decode_saved_data(blob):
             )
     
     dat = db.parse(blob)
-
-    # define columns and assemble header
-    cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload')
-    ret = [", ".join(cols)]
-
+   
+    dat2 = []
     for rec in dat['data']:
         # bcd decoding
         for key in ['year', 'week', 'month', 'day', 'hour', 'minute', 'second']:
@@ -224,12 +219,17 @@ def decode_saved_data(blob):
                 'dispmode' : stat1['dispmode'],
                 'memload'  : stat1['memload']
                 }
-       
-        # turn rec into a comma separated row
-        if rec['pos'] > 0:
-            ret.append(", ".join(([str(rec[col]) for col in cols])))
 
-    return("\n".join(ret))
+        dat2.append(rec)
+
+    # translate to csv
+    cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload')
+    csv = [", ".join(cols)]
+    for rec in dat2:
+        if rec['pos'] > 0:
+            csv.append(", ".join(([str(rec[col]) for col in cols])))
+    
+    return("\n".join(csv))
 
 
 def decode_logger_data(blob):
@@ -242,7 +242,7 @@ def decode_logger_data(blob):
             'stat0' / Int8ub
             )
 
-    Record = Struct(
+    Group = Struct(
             'magic'     / Const(b'\xaa\x56'),
             'recno'     / Int8ub,
             'sampling'  / Int8ub,
@@ -254,19 +254,25 @@ def decode_logger_data(blob):
             'hour'      / Int8ub,
             'minute'    / Int8ub,
             'second'    / Int8ub,
-            'data'      / Array(this.recno, Datapoint) # this is not right - but what is?
+            'data'      / RepeatUntil(lambda x, lst, ctx: Peek(Int8ub)==0xaa, Datapoint)
+            #'data'      / Array(4, Datapoint) 
+            #'data'      / GreedyRange(Datapoint)
             )
 
     db = Struct(
             'magic'   / Const(b'\xaa\xcc'),
             'groups'  / Int8ub,
             'bufsize' / Int16ub,
-            #'data'    / Array(this.groups, Record)
-            'data'    / Record
+            'data'    / Array(this.groups, Group)
+            #'data'    / Group
             )
-    # XXX Hm - how do I know how many data points are in a record?
+    # XXX Hm - how do I know how many data points are in a group?
 
     dat = db.parse(blob)
+
+    # TODO transform: bcd2int
+    # TODO transform: reassembly
+    # TODO transform: csv
 
     return(dat)
 
@@ -449,14 +455,14 @@ cmd = OrderedDict([
         'cmd' : b"\x11", 
         'ret' : True,
         'key' : None,
-        'desc': "Read live data."
-        },
+        'desc': "Read live data"
+        }
         ),
     ('get-saved-data', { 
         'cmd' : b"\x12", 
         'ret' : True,
         'key' : None,
-        'desc': "Read manually saved data"
+        'desc': "Read manually saved data (registers 1-99)"
         }
         ),
     ('get-logger-data', { 
@@ -464,7 +470,7 @@ cmd = OrderedDict([
         'ret' : True,
         'key' : None,
         'desc': "Read logger data"
-        },
+        }
         )
     ])
 

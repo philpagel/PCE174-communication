@@ -13,7 +13,7 @@ copyright violations. So if you want it ask nicely and PCE or Extech may send
 it to you, too.
 
 *Caution:* This is still work in process and I am updating this document and
-the script as I learn. So don't complain if it damages you car, explodes your
+the script as I learn. So don't complain if it wrecks your car, explodes your
 house or harms a kitten.
 
 
@@ -49,14 +49,16 @@ presses:
 
 Code | Command           | Description
 -----|-------------------|-------------------------------------------------
-0x11 | get-timing        | ?
-0x12 | get-stored-data   | Read manually stored data registers
+0x11 | get-live-data     | Read the current measurement
+0x12 | get-saved-data    | Read manually stored data registers (1-99)
 0x13 | get-logger-data   | Read logger data
-0x14 | get-data-protocol | ?
+0x14 | –                 | Does not exist but is in original docs
 
 After receiving one of these commands, the instrument returns a binary blob
 that requires decoding. The structure of these blobs is described in the next
-section.
+section. The command `0x14` appears in the original documentation but seems to
+do nothing. The Data described for this command is actually part of the data
+structure returned by `0x13` so is most likely an error in the original docs.
 
 
 ## Detailed description of received data blobs

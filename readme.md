@@ -79,7 +79,9 @@ If it is not provided by your distribution just install a local version:
 To communicate with the light meter connect through USB and run the command
 like this:
 
-    usage: pce174 [-h] [-l] [-i INTERFACE] [-b BAUD] [-f {csv,raw,hex}] [command]
+    usage: pce174 [-h] [-l] [-i INTERFACE] [-b BAUD] [-t TIMEOUT]
+                  [-f {csv,raw,hex}]
+                  [command]
 
     Talk to a PCE-174 lightmeter/logger
 
@@ -88,11 +90,12 @@ like this:
 
     optional arguments:
       -h, --help        show this help message and exit
-      -l, --list        List all available commands
+      -l, --list        list all available commands
       -i INTERFACE      interface to connect to (/dev/ttyUSB0)
       -b BAUD           baudrate (9600)
       -t TIMEOUT        serial communication timeout [s] (3)
       -f {csv,raw,hex}  return data in the specified format (csv)
+
 
 Typically you can stick to the defaults, maybe with the exception of the
 interface specification (in case `/dev/ttyUSB0` is not what you need, certainly
@@ -104,69 +107,75 @@ The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
 key presses on the instrument. See *Button* entry for this information.
 
-    Available commands:
+Available commands:
 
-      units
-          Toggle units between lux and fc
-          Button: UNITS
+  units
+      Toggle units between lux and fc
+      Button: UNITS
 
-      light
-          Toggle backlight
-          Button: Light/LOAD
+  light
+      Toggle backlight
+      Button: Light/LOAD
 
-      range
-          Cycle through measurement ranges
-          Button: RANGE/APO
+  range
+      Cycle through measurement ranges
+      Button: RANGE/APO
 
-      save
-          Save reading to memory
-          Button: REC/Setup
+  save
+      Save reading to memory
+      Button: REC/Setup
 
-      peak
-          Toggle peak value display
-          Button: PEAK/LEFT
+  peak
+      Toggle peak value display
+      Button: PEAK/LEFT
 
-      rel
-          Toggle realtive reading
-          Button: REL/RIGHT
+  rel
+      Toggle realtive reading
+      Button: REL/RIGHT
 
-      minmax
-          Toggle Min/Max/current value display 
-          Button: MAX/MIN/UP
+  minmax
+      Toggle Min/Max/current value display 
+      Button: MAX/MIN/UP
 
-      hold
-          Toggle hold
-          Button: HOLD/DOWN
+  hold
+      Toggle hold
+      Button: HOLD/DOWN
 
-      off
-          Turn off the instrument
-          Button: POWER
+  off
+      Turn off the instrument
+      Button: POWER
 
-      logging
-          Start/stop data logging
-          Button: REC-hold
+  logging
+      Start/stop data logging
+      Button: REC-hold
 
-      prevview
-          Switch to previous display view mode
-          Button: PEAK-hold
+  prevview
+      Switch to previous display view mode
+      Button: PEAK-hold
 
-      nextview
-          Switch to next display view mode
-          Button: REL-hold
+  nextview
+      Switch to next display view mode
+      Button: REL-hold
 
-      viewsaved
-          Toggle view mode for saved data
-          Button: LIGHT/LOAD-hold
+  viewsaved
+      Toggle view mode for saved data
+      Button: LIGHT/LOAD-hold
 
-      get-live-data
-          Read live data.
-          Button: None
-          Returns data in the specified format (-f)
+  get-live-data
+      Read live data
+      Button: None
+      Returns data in the specified format (-f)
 
-      get-saved-data
-          Read manually saved data
-          Button: None
-          Returns data in the specified format (-f)
+  get-saved-data
+      Read manually saved data (from the 99 registers)
+      Button: None
+      Returns data in the specified format (-f)
+
+  get-logger-data
+      Read logger data
+      Button: None
+      Returns data in the specified format (-f)
+
 
 
 ## get-live-data
