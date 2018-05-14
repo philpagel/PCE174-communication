@@ -121,6 +121,8 @@ like this:
       -t TIMEOUT            serial communication timeout [s] (5)
       -f {csv,repr,construct,raw,hex}
                             specify output format (csv)
+      -F --file FILE        parse previously saved raw data instead of reading
+                            from the instrument
       -s SEP, --sep SEP     separator for csv (',')
 
 
