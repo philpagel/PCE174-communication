@@ -7,14 +7,13 @@ or compatible devices like the Extech HD450
 """
 
 # todo
-#   - what happens if logging in rel mode: negative values?
-#   - implement parsing/processing data from files? Woul;d be nice for debuggin or stored raw data
-#   - what is memload? is this a usefull name
-#   - what is read_no in live data?
+#   - implement parsing/processing data from files? Would be nice for debuggin or stored raw data
 #   - find out how to send simultaneous key presses (if possible)
 #   - find out if we can set date, time and sampling interval through a command
 #   - maybe round output or assemble values in BCD to avoid funny numerical artifacts?
 #   - add some checks for data integrity/completeness?
+#   - what is memload? is this a usefull name
+#   - what is read_no in live data?
 #   - get rid of timeout: rather test for data completeness
 #   - test, test, test
 
@@ -51,20 +50,29 @@ def main():
                 print(' '*5, "Returns data in the specified format (-f)")
             print()
     elif args.command in cmd:
-        try:
-            iface = serial.Serial(
-                    port=args.interface, 
-                    baudrate=args.baud, 
-                    bytesize=args.bytesize, 
-                    parity=args.parity, 
-                    stopbits=args.stopbits, 
-                    timeout=args.timeout
-                    )
-        except:
-            sys.exit("Unable to connect to device.") 
+        
+        if len(args.file) > 0:
+            if cmd[args.command]['ret']:
+                infile = open(args.file, 'rb')
+                blob = infile.read()
+                infile.close()
+            else:
+                sys.exit("Cannot run command '%s' from file - no data expected." % (args.command))
+        else:
+            try:
+                iface = serial.Serial(
+                        port=args.interface, 
+                        baudrate=args.baud, 
+                        bytesize=args.bytesize, 
+                        parity=args.parity, 
+                        stopbits=args.stopbits, 
+                        timeout=args.timeout
+                        )
+            except:
+                sys.exit("Unable to connect to device.") 
 
-        blob = send_command(iface, args.command)
-        iface.close()
+            blob = send_command(iface, args.command)
+            iface.close()
 
         if cmd[args.command]['ret']: # read data
             if args.format == "raw":
@@ -111,6 +119,7 @@ def getargs():
     parser.add_argument('-S', dest="stopbits", type=float, default=1, choices=[1, 1.5, 0], help="stopbits (1)")
     parser.add_argument('-t', dest="timeout", type=float, default=5, help="serial communication timeout [s] (5)")
     parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv', 'repr', 'construct', 'raw', 'hex'], help="specify output format (csv)")
+    parser.add_argument('-F' '--file', dest="file", type=str, default="", help="parse previously saved raw data instead of reading from the instrument")
     parser.add_argument('-s', '--sep', dest="sep", type=str, default=",", help="separator for csv (',')") 
     parser.add_argument('command', nargs='?', type=str, help="command to send to instrument")
 
