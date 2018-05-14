@@ -4,7 +4,7 @@ This script implements the serial communication protocol used by the PCE-174
 logging light meter.
 
 The PCE-174 appears to be identical to the Extech HD450 light meter but as I
-don't own the latter I have no way to test this.  The user manual for the
+don't own the latter I have no way of testing this.  The user manual for the
 Extech version of the instrument is quite a bit better than the PCE version, so
 try and find it online...
 
@@ -13,10 +13,15 @@ See `protocol.md` for a detailed description of the communication protocol.
 
 ## Status
 
-Currently, the script can send control commands and read live-data, the storage
-of manually saved data from the instrument and logging data. I.e. all
-functionality that can be derived from the manufacturer protocol docs has been
-implemented. It is possible, however, that there are undocumented functions.
+The script can send commands to control the instrument and request data from it:
+
+* Live data: the current reading
+* Saved data: the 99 registers for manually saved values
+* Loggin data: entire logging sessions stored in instrument memory
+
+I.e. all functionality that can be derived from the manufacturer protocol
+documentation has been implemented. It is possible, however, that there are
+undocumented functions.
 
 I have carried out some testing of all functions but not extensively, so I'm
 sure there still are relevant bugs. Therefore, this is not production ready but
@@ -26,14 +31,16 @@ Feedback/bug reports are welcome.
 
 Known issues:
 
-* The data logger records do not contain a sign, so values are always positive.
-  it is possilbe to start loggiun iun rel mode so negative valeus are displayed
-  during a seesion when light intensity drops below the reference value but
-  this is not relfected in the logged data. At this point I am not shire if the
-  instrument loggs rel values or rawvalues in this case. 
-* I am not quite sure what `memload` from the `Stat0` byte does. Once I find
-  out I may change the name so reflect its meaning. I'll leave that to a later
+* I am not sure what `memload` from the `Stat0` byte does. Once I find
+  out I may change the name to reflect its meaning. I'll leave that to a later
   release.
+* I have no idea what read_no in the live data records is supposed to mean.
+* In logging mode, no sign is stored. That prevents the logging of negative
+  values which can occur in rel mode when light intensity drops below the
+  reference value. According to my tests this is not a problem because the
+  logging function does not honor rel mode but rather records absolute values.
+  this is kind of inconsistent as the rel flag IS recorded. Keep this in mind
+  when logging.
 * Sometimes the instrument stores invalid data like seconds > 59. This causes
   data processing to fail. You can still use raw, hex or construct format but
   repr and csv do not work in those cases...
@@ -116,11 +123,12 @@ like this:
                             specify output format (csv)
       -s SEP, --sep SEP     separator for csv (',')
 
+
 Typically you can stick to the defaults, maybe with the exception of the
 interface specification (in case `/dev/ttyUSB0` is not what you need, certainly
 under Windows). In my hands, the default TIMEOUT is enough for reading saved
 data.  For live data 0.3s work for me. If timeout is too short, you will get
-truncated data.
+truncated data or a crash so make sure to choose a sufficient timeout.
 
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
@@ -186,7 +194,7 @@ key presses on the instrument. See *Button* entry for this information.
           Returns data in the specified format (-f)
 
       get-saved-data
-          Read manually saved data (from the 99 registers)
+          Read manually saved data (registers 1-99)
           Button: None
           Returns data in the specified format (-f)
 
@@ -198,34 +206,35 @@ key presses on the instrument. See *Button* entry for this information.
 
 ## Data formats
 
-Through the -f option you can choose from several oiutput format options:
+Through the -f option you can choose from several output format options:
 
 ### csv
 
 This is the most useful format for most purposes, as it can easily be imported
-into other software.  The firs row is the header declaring the column names.
-The field separator is a comma (`','`) by default and can be chosen with the
-`-s` option Lines are separated by a single newline character (`\n`).
+into other software.  The first row is the header declaring the column names.
+The field separator is a comma (`','`), by default and can be chosen with the
+`-s` option. Lines are separated by a single newline character (`\n`).
 
 
 ### repr
 
-This format is the python prepresentation of the data. It is mostly useful fro
-debugging and possibly for us in pother python programs although in the latter
-cse its probably better to impirt the script as amodule and use the data
+This format is the Python representation of the data. It is mostly useful for
+debugging and possibly for use in other python programs although in the latter
+case it's probably better to import the script as a module and use the data
 directly as it is returned from the parse-XXX-data or process-XXX-data
 functions.
 
 
 ### construct
 
-This is the the container representation of the construct library. For
+This is the container representation of the construct library. For
 debugging, only.
 
 
 ### raw
 
-This format simply writes the binary blog to `STDOUT` as it is received from the instrument.
+This format simply writes the binary blob to `STDOUT` as it is received from
+the instrument.
 
 
 ### hex
@@ -240,10 +249,10 @@ This can be used for single readings or automated logging from a computer
 without using the logging feature of the instrument.  By default, the command
 returns comma separated data (CSV) to `STDOUT`.  Example:
 
-    date, time, value, relvalue, unit, range, mode, hold, APO, power, dispmode, memload, mem_no, read_no
-    2007-08-15, 23:49:58, 21.1, 21.1, lux, 400, normal, cont, on, ok, time, mem, 27, 12
+    date,time,value,rawvalue,unit,range,mode,hold,APO,power,dispmode,memload,mem_no,read_no
+    2007-08-15,23:49:58,21.1,21.1,lux,400,normal,cont,on,ok,time,mem,27,12
 
-The first row contains table headers with the following meaning:
+The first row contains column headers with the following meaning:
 
 Column    | Description
 ----------|-----------------------------------------------
@@ -266,11 +275,12 @@ In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
 `rawvalue` contains the absolute reading (that would be measured without *rel*
 mode) and `value` is the relative reading as displayed on the screen.
 
-The script ignores the `weekday` field in the data, because it has a few
-issues: The weekday is set and returned as a number (1-7) and manually set –
-i.e. the instrument does not try to ensure that the weekday entry matches the
-date. In order to avoid confusion, I decided to ignore the weekday. If you need
-the weekday, better compute it from the date.
+The binary data from the instrument includes a `weekday` field in the data
+which is completely ignored by this script, because it has a few issues: The
+weekday is a number (1-7) and manually set – i.e. the instrument does not try
+to ensure that the weekday entry matches the date. In order to avoid confusion,
+I decided to ignore the weekday. If you need the weekday, better compute it
+from the date.
 
 
 ## get-saved-data
@@ -279,13 +289,13 @@ This command reads a table of manually saved data from the instrument.
 By default, the command returns comma separated data (CSV) to `STDOUT`.
 Example:
 
-    pos, date, time, value, unit, range, mode, hold, APO, power, dispmode, memload
-    1, 2007-08-15, 20:11:34, 20.1, lux, 400, normal, cont, on, ok, time, 1
-    2, 2007-08-15, 20:11:37, 4.0, lux, 4k, normal, cont, on, ok, time, 1
-    3, 2007-08-15, 20:11:40, 0, lux, 40k, normal, cont, on, ok, time, 1
-    4, 2007-08-15, 20:11:43, 0, lux, 400k, normal, cont, on, ok, time, 1
+    pos,date,time,value,unit,range,mode,hold,APO,power,dispmode,memload
+    1,2007-08-15,20:11:34,20.1,lux,400,normal,cont,on,ok,time,1
+    2,2007-08-15,20:11:37,4.0,lux,4k,normal,cont,on,ok,time,1
+    3,2007-08-15,20:11:40,0,lux,40k,normal,cont,on,ok,time,1
+    4,2007-08-15,20:11:43,0,lux,400k,normal,cont,on,ok,time,1
 
-The first row contains table headers with the following meaning:
+The first row contains column headers with the following meaning:
 
 Column    | Description
 ----------|-----------------------------------------------
@@ -294,13 +304,54 @@ date      | Date in ISO-8601 format (YYYY-MM-DD)
 time      | Time (HH:MM:SS)
 value     | Numerical value
 unit      | Unit of measurement (lux/fc)
-range     | Measurement range used (40, 400, ... 4000k)
+range     | Measurement range used (40, 400, ... 400k)
 mode      | normal/Pmin/Pmax/min/max/rel 
 hold      | Was hold active? (hold/cont)
 APO       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
 memload   | No idea what this is (0/1/2). Name may change in the future.
+
+See get-live-data for details on other formats and weekday handling.
+
+
+## get-logger-data
+
+This command reads logger data from the instrument.
+By default, the command returns comma separated data (CSV) to `STDOUT`.
+Example:
+
+    groupno,id,date,time,value,unit,range,mode,hold,APO
+    1,0,2007-08-15,20:15:37,110.30000000000001,lux,400,normal,cont,on
+    1,1,2007-08-15,20:15:39,110.0,lux,400,normal,cont,on
+    1,2,2007-08-15,20:15:41,126.9,lux,400,normal,cont,on
+    1,3,2007-08-15,20:15:43,96.30000000000001,lux,400,normal,cont,on
+    2,0,2007-08-15,20:20:16,67.9,lux,400,normal,cont,on
+    2,1,2007-08-15,20:20:18,66.60000000000001,lux,400,normal,cont,on
+    2,2,2007-08-15,20:20:20,66.2,lux,400,normal,cont,on
+    2,3,2007-08-15,20:20:22,76.9,lux,400,normal,cont,on
+    2,4,2007-08-15,20:20:24,108.10000000000001,lux,400,normal,cont,on
+    2,5,2007-08-15,20:20:26,108.0,lux,400,normal,cont,on
+    2,6,2007-08-15,20:20:28,107.7,lux,400,normal,cont,on
+    3,0,2007-08-15,20:12:15,38.0,lux,400,normal,cont,on
+    3,1,2007-08-15,20:12:17,37.800000000000004,lux,400,normal,cont,on
+    3,2,2007-08-15,20:12:19,54.1,lux,400,normal,cont,on
+
+
+The first row contains column headers with the following meaning:
+
+Column    | Description
+----------|-----------------------------------------------
+groupno   | numerical id of the logging group [1, 2, ...]
+id        | measurement number within the group [0, 1, ...]
+date      | YYYY-MM-DD
+time      | HH:MM:SS
+value     | measurement
+unit      | Unit of measurement (lux/fc)
+range     | Measurement range used (40, 400, ... 400k)
+mode      | normal/Pmin/Pmax/min/max/rel 
+hold      | Was hold active? (hold/cont)
+APO       | Auto-power-off (on/off)
 
 See get-live-data for details on other formats and weekday handling.
 

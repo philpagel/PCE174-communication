@@ -3,10 +3,11 @@
 pce174 
 
 A tool to communicate with a PCE-174 lightmeter/logger
+or compatible devices like the Extech HD450
 """
 
 # todo
-#   - what hapens if logging in rel mode: negative values?
+#   - what happens if logging in rel mode: negative values?
 #   - implement parsing/processing data from files? Woul;d be nice for debuggin or stored raw data
 #   - what is memload? is this a usefull name
 #   - what is read_no in live data?
@@ -17,7 +18,6 @@ A tool to communicate with a PCE-174 lightmeter/logger
 #   - get rid of timeout: rather test for data completeness
 #   - test, test, test
 
-
 import sys, argparse
 import serial
 import warnings
@@ -27,8 +27,16 @@ from collections import OrderedDict
 # requires construct ≥ 2.8 (tested with 2.9)
 from construct import * 
 
+__version__     = "0.3"
+__status__      = "Prototype"
+__author__      = "Philipp Pagel"
+__copyright__   = "Copyright 2018, Philipp Pagel"
+__license__     = "MIT License"
+
+
+
 def main():
-    "The main function - duh."
+    "The main function"
 
     global args
     args = getargs()
@@ -70,7 +78,14 @@ def main():
 
 
 def send_command(iface, command):
-    "Send command to instrument"
+    """Send command to instrument
+
+    command : must be one of the valid command strings defiend in cmd
+    ifce    : where the binary command is written to. Typically the 
+              respective usb-serial interface like /dev/ttyUSB0
+
+    returns the binary blob that is receiven in response or empty byte array
+    """
 
     hello = b"\x87\x83"	# command prefix
     msg = hello + cmd[args.command]['cmd']
@@ -103,7 +118,10 @@ def getargs():
 
 
 def bcd2int(dat):
-    "Return the decimal value of a BCD encoded int"
+    """Return the decimal value of a BCD encoded int
+    
+    The int can be of arbitrary length
+    """
 
     ret = 0
     f = 1
@@ -118,7 +136,10 @@ def bcd2int(dat):
 
 
 def decode_blob(cmd, blob):
-    "return decoded data"
+    """return decoded data
+    
+    Central dispatch for the different parsing, processing nd csv translationn steps
+    """
 
     ret = None
     if cmd == "get-live-data":
@@ -146,7 +167,11 @@ def decode_blob(cmd, blob):
 
 
 def parse_live_data(blob):
-    "parse live data to construct container"
+    """parse live data to construct container
+    
+    Accept a binary blob of live data and parse it.
+    Returns a construct container object with paresed data.
+    """
 
     Live_data = Struct(
             'magic' / Const(b'\xaa\xdd'),
@@ -177,8 +202,27 @@ def process_live_data(rec):
     Accepts a construct container object and returns a dict
     representing the measurement.
     
-    Processing comprises the assembly of common time and date formats as well as 
-    turning bit fields into human readable values.
+    Processing comprises the assembly of common time and date formats as well
+    as turning bit fields into human readable values.
+    
+    Measurment records are dicts with the following keys:
+
+    Key       | Description
+    ----------|-----------------------------------------------
+    date      | Date in ISO-8601 format (YYYY-MM-DD)
+    time      | Time (HH:MM:SS)
+    value     | Numerical value of reading
+    rawvalue  | raw numerical value 
+    unit      | Unit of measurement (lux/fc)
+    range     | Measurement range used (40, 400, ... 4000k)
+    mode      | normal/Pmin/Pmax/min/max/rel 
+    hold      | Was hold active? (hold/cont)
+    APO       | Auto-power-off (on/off)
+    power     | Power status (ok/low)
+    dispmode  | Active display mode (time/day/sampling/year)
+    memload   | No idea what this is (0/1/2). Name may change in the future.
+    mem_no    | Number of manually saved records in memory. (See get-saved-data)
+    read_no   | ?
     """
 
     # bcd decoding
@@ -194,11 +238,11 @@ def process_live_data(rec):
             'time'     : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
             'value'    : stat1['sign'] * (100*rec['dat1H'] + rec['dat1L']) * stat0['Frange'],
             'rawvalue' : (100*rec['dat0H'] + rec['dat0L']) * stat0['Frange'],
-            'APO'      : stat0['APO'],
-            'hold'     : stat0['hold'],
             'unit'     : stat0['unit'],
             'range'    : stat0['range'],
             'mode'     : stat0['mode'],
+            'hold'     : stat0['hold'],
+            'APO'      : stat0['APO'],
             'power'    : stat1['power'],
             'dispmode' : stat1['dispmode'],
             'memload'  : stat1['memload'],
@@ -210,7 +254,7 @@ def process_live_data(rec):
 
 
 def live_data2csv(dat):
-    "returns csv from live data dict"
+    """returns csv from live data dict"""
     
     # define columns and assemble header
     cols = ('date', 'time', 'value', 'rawvalue', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload', 'mem_no', 'read_no')
@@ -222,7 +266,11 @@ def live_data2csv(dat):
 
 
 def parse_saved_data(blob):
-    "parse saved data to construct container"
+    """parse saved data to construct container
+
+    Accept a binary blob of saved data and parse it.
+    Returns a cosntruct container object with paresed data.
+    """
 
     record = Struct(
             'foo'   / Int8ub, # should be 0x00 but isn't always
@@ -257,6 +305,23 @@ def process_saved_data(dat):
     
     Processing comprises the assembly of common time and date formats as well as 
     turning bit fields into human readable values.
+
+    Saved data records are dicts with the folloing keys:
+
+    Key       | Description
+    ----------|-----------------------------------------------
+    pos       | Number of the storage position
+    date      | Date in ISO-8601 format (YYYY-MM-DD)
+    time      | Time (HH:MM:SS)
+    value     | Numerical value
+    unit      | Unit of measurement (lux/fc)
+    range     | Measurement range used (40, 400, ... 400k)
+    mode      | normal/Pmin/Pmax/min/max/rel 
+    hold      | Was hold active? (hold/cont)
+    APO       | Auto-power-off (on/off)
+    power     | Power status (ok/low)
+    dispmode  | Active display mode (time/day/sampling/year)
+    memload   | No idea what this is (0/1/2). Name may change in the future.
     """
 
     dat2 = []
@@ -278,11 +343,11 @@ def process_saved_data(dat):
                 'date'      : dtime.date(),
                 'time'      : dtime.time(),
                 'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
-                'APO'      : stat0['APO'],
-                'hold'     : stat0['hold'],
                 'unit'     : stat0['unit'],
                 'range'    : stat0['range'],
                 'mode'     : stat0['mode'],
+                'hold'     : stat0['hold'],
+                'APO'      : stat0['APO'],
                 'power'    : stat1['power'],
                 'dispmode' : stat1['dispmode'],
                 'memload'  : stat1['memload']
@@ -306,8 +371,11 @@ def saved_data2csv(dat):
 
 
 def parse_logger_data(blob):
-    "Decode logger_data to csv"
-
+    """Decode logger_data to csv
+    
+    Accept a binary blob of logger data and parse it.
+    Returns a cosntruct container object with parsed data.
+    """
 
     Datapoint = Struct(
             'datH'  / Int8ub,
@@ -349,18 +417,20 @@ def process_logger_data(dat):
     Accepts a construct container object and returns a list of logging groups.
     
     Each group is a list of data points. Datapoints are dicts with the following keys:
-    
-    groupno   : numerical id of the logging group
-    id        : measurement number within the group [0,1, ...]
-    sampling  : sampling interval [s]
-    date      : YYYY-MM-DD
-    time      : HH:MM:SS
-    value     : measurement
-    unit      : Unit of measurement (lux/fc)
-    range     : Measurement range used (40, 400, ... 4000k)
-    mode      : normal/Pmin/Pmax/min/max/rel 
-    hold      : Was hold active? (hold/cont)
-    APO       : Auto-power-off (on/off)
+   
+    Key       | Description
+    ----------|-------------------------------------------------
+    groupno   | numerical id of the logging group
+    id        | measurement number within the group [0,1, ...]
+    sampling  | sampling interval [s]
+    date      | YYYY-MM-DD
+    time      | HH:MM:SS
+    value     | measurement
+    unit      | Unit of measurement (lux/fc)
+    range     | Measurement range used (40, 400, ... 400k)
+    mode      | normal/Pmin/Pmax/min/max/rel 
+    hold      | Was hold active? (hold/cont)
+    APO       | Auto-power-off (on/off)
 
     """
 
@@ -410,7 +480,24 @@ def logger_data2csv(dat):
 
 
 def decode_stat0(byte):
-    "return a dict from stat0 byte data"
+    """return a dict from stat0 byte data
+    
+    The return value is a dict with decoded information form the bit field and
+    contains the following keys
+    
+    Key    | Description
+    -------|---------------------------------
+    unit   | unit of measurement [lux/fc]
+    range  | measurement range [(40, 400, ... 400k)]
+    APO    | Auto-power-off (on/off)
+    mode   | (normal/Pmin/Pmax/max/min/rel
+    hold   | hold/cont
+    Frange | Factor for decimal point of value
+
+    This is how Frange is intended to be use:
+
+    value = Stat0_sign * (100 * valH + valL) * Frange
+    """
     
     Stat0 = BitStruct(
                 'APO'   / Flag,
@@ -456,8 +543,19 @@ def decode_stat0(byte):
 
 
 def decode_stat1(byte):
-    "return a dict from Stat1 byte data"
+    """return a dict from Stat1 byte data
     
+    The return value is a dict with decoded information form the bit field and
+    contains the folliwing keys
+
+    Key         | Description
+    ------------|---------------------------------
+    power       | ok/low
+    sign        | +1/-1
+    displaymode | time/day/sampling-interval/year
+    memload     | MEM/LOAD
+    """
+
     Stat1 = BitStruct(
                 BitsInteger(2),
                 'power'    / Flag,
