@@ -100,9 +100,8 @@ If it is not provided by your distribution just install a local version:
 To communicate with the light meter connect through USB and run the command
 like this:
 
-    usage: pce174 [-h] [-l] [-i INTERFACE] [-b BAUD] [-B {8,7,6,5}]
-                  [-p {N,E,O,M,S}] [-S {1,1.5,0}] [-t TIMEOUT]
-                  [-f {csv,repr,construct,raw,hex}] [-s SEP]
+    usage: pce174 [-h] [-l] [-i INTERFACE] [-f {csv,repr,construct,raw,hex}]
+                  [-T SAMPLING] [-F FILE] [-s SEP]
                   [command]
 
     Talk to a PCE-174 lightmeter/logger
@@ -114,23 +113,12 @@ like this:
       -h, --help            show this help message and exit
       -l, --list            list all available commands
       -i INTERFACE          interface to connect to (/dev/ttyUSB0)
-      -b BAUD               baudrate (9600)
-      -B {8,7,6,5}          byte size (8)
-      -p {N,E,O,M,S}        parity (N)
-      -S {1,1.5,0}          stopbits (1)
-      -t TIMEOUT            serial communication timeout [s] (5)
       -f {csv,repr,construct,raw,hex}
                             specify output format (csv)
-      -F --file FILE        parse previously saved raw data instead of reading
+      -F FILE, --file FILE  parse previously saved raw data instead of reading
                             from the instrument
       -s SEP, --sep SEP     separator for csv (',')
 
-
-Typically you can stick to the defaults, maybe with the exception of the
-interface specification (in case `/dev/ttyUSB0` is not what you need, certainly
-under Windows). In my hands, the default TIMEOUT is enough for reading saved
-data.  For live data 0.3s work for me. If timeout is too short, you will get
-truncated data or a crash so make sure to choose a sufficient timeout.
 
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
@@ -206,6 +194,42 @@ key presses on the instrument. See *Button* entry for this information.
           Returns data in the specified format (-f)
 
 
+
+## Usage as a module
+
+You can import this script as a module and call its functions directly. This may be handy
+if you want to write your own software that needs access to the instrument.
+
+In order for this to work, you need to rename the script to `pce174.py`. Without the extension
+import will not work. Alternatively, a properly named symlink will do.
+
+Example session:
+
+    >>> import pce174
+    
+    >>> pce174.send_command('/dev/ttyUSB0', 'light')
+    
+    >>> dat = pce174.send_command('/dev/ttyUSB0', 'get-live-data')
+    
+    >>> dat
+    b'\xaa\xdd\x00\x07\x02\x08\x15"$\x18\x00O\x00O\x01!c\x01\x02'
+    
+    >>> container = pce174.parse_live_data(dat)
+    
+    >>> container
+    Container(magic=b'\xaa\xdd', year=7, weekday=2, month=8, day=21, hour=34, 
+    minute=36, second=24, dat0H=0, dat0L=79, dat1H=0, dat1L=79, stat0=1, 
+    stat1=33, mem_no=99, read_no=1)
+    
+    >>> pce174.process_live_data(container)
+    {'date': '2007-08-15', 'mode': 'normal', 'APO': 'on', 'unit': 'lux', 
+    'rawvalue': 7.9, 'hold': 'cont', 'value': 7.9, 'dispmode': 'time', 
+    'power': 'low', 'mem_no': 99, 'read_no': 1, 'range': '400', 'memload': 
+    'mem', 'time': '22:24:18'}
+
+See pydoc and/or source code for function documentation.
+
+
 ## Data formats
 
 Through the -f option you can choose from several output format options:
@@ -242,6 +266,20 @@ the instrument.
 ### hex
 
 Similar to raw but transcribed to hex representation.
+
+
+## Saving raw data and paring it later
+
+If you write raw data blobs into a file you can later parse it:
+
+    pce174 get-saved-data -f raw > foo.dat
+    
+    pce174 get-saved-data -F foo
+
+    pce174 get-saved-data -F foo -f repr
+
+This may be useful, if you are not sure if you want the data in different formats, later or for debugging.
+Also it may help for bug reports in order to reproduce the problem based on actual raw data.
 
 
 ## get-live-data
