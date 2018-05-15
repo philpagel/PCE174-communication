@@ -8,16 +8,14 @@ or compatible devices like the Extech HD450
 
 # todo
 #   - find out how to send simultaneous key presses (if possible)
-#   - find out if we can set date, time and sampling interval through a command
 #   - maybe round output or assemble values in BCD to avoid funny numerical artifacts?
 #   - add some checks for data integrity/completeness?
 #   - what is memload? is this a usefull name
 #   - what is read_no in live data?
-#   - get rid of timeout: rather test for data completeness
 #   - test, test, test
 
 import sys, argparse
-import serial
+import serial, time
 import warnings
 import binascii
 from datetime import *
@@ -59,14 +57,7 @@ def main():
                 sys.exit("Cannot run command '%s' from file - no data expected." % (args.command))
         else:
             try:
-                iface = serial.Serial(
-                        port=args.interface, 
-                        baudrate=args.baud, 
-                        bytesize=args.bytesize, 
-                        parity=args.parity, 
-                        stopbits=args.stopbits, 
-                        timeout=args.timeout
-                        )
+                iface = serial.Serial(port=args.interface, baudrate=9600, bytesize=8, parity='N', stopbits=1, timeout=0.1)
             except:
                 sys.exit("Unable to connect to device.") 
 
@@ -82,7 +73,6 @@ def main():
                 print(decode_blob(args.command, blob))
     else:
         sys.exit("Unknown command")
-
 
 def send_command(iface, command):
     """Send command to instrument
@@ -100,7 +90,13 @@ def send_command(iface, command):
     
     blob = b''
     if cmd[command]['ret']:
-        blob = iface.read(100000)
+        #blob = iface.read(100000)
+        while True:
+            byte = iface.read(1)
+            if len(byte) > 0: 
+                blob += byte
+            else:
+                break
 
     return(blob)
 
@@ -112,13 +108,9 @@ def getargs():
 
     parser.add_argument('-l', '--list', dest='list', action='store_true', help="list all available commands")
     parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to (/dev/ttyUSB0)")
-    parser.add_argument('-b', dest="baud", type=int, default=9600, help="baudrate (9600)")
-    parser.add_argument('-B', dest="bytesize", type=int, default=8, choices =[8, 7, 6, 5], help="byte size (8)")
-    parser.add_argument('-p', dest="parity", type=str, default='N', choices =['N', 'E', 'O', 'M', 'S'], help="parity (N)")
-    parser.add_argument('-S', dest="stopbits", type=float, default=1, choices=[1, 1.5, 0], help="stopbits (1)")
-    parser.add_argument('-t', dest="timeout", type=float, default=5, help="serial communication timeout [s] (5)")
     parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv', 'repr', 'construct', 'raw', 'hex'], help="specify output format (csv)")
-    parser.add_argument('-F' '--file', dest="file", type=str, default="", help="parse previously saved raw data instead of reading from the instrument")
+    parser.add_argument('-T', '--sampling',  dest="sampling", type=int, default=0, help="set sampling interval for tethered logging [s]. See get-live-data command (0)")
+    parser.add_argument('-F', '--file', dest="file", type=str, default="", help="parse previously saved raw data instead of reading from the instrument")
     parser.add_argument('-s', '--sep', dest="sep", type=str, default=",", help="separator for csv (',')") 
     parser.add_argument('command', nargs='?', type=str, help="command to send to instrument")
 

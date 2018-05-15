@@ -100,10 +100,8 @@ If it is not provided by your distribution just install a local version:
 To communicate with the light meter connect through USB and run the command
 like this:
 
-    usage: pce174 [-h] [-l] [-i INTERFACE] [-b BAUD] [-B {8,7,6,5}]
-                  [-p {N,E,O,M,S}] [-S {1,1.5,0}] [-t TIMEOUT]
-                  [-f {csv,repr,construct,raw,hex}] [-s SEP]
-                  [command]
+    usage: pce174 [-h] [-l] [-i INTERFACE] [-f {csv,repr,construct,raw,hex}] 
+                [-s SEP] [command]
 
     Talk to a PCE-174 lightmeter/logger
 
@@ -114,23 +112,11 @@ like this:
       -h, --help            show this help message and exit
       -l, --list            list all available commands
       -i INTERFACE          interface to connect to (/dev/ttyUSB0)
-      -b BAUD               baudrate (9600)
-      -B {8,7,6,5}          byte size (8)
-      -p {N,E,O,M,S}        parity (N)
-      -S {1,1.5,0}          stopbits (1)
-      -t TIMEOUT            serial communication timeout [s] (5)
       -f {csv,repr,construct,raw,hex}
                             specify output format (csv)
       -F --file FILE        parse previously saved raw data instead of reading
                             from the instrument
       -s SEP, --sep SEP     separator for csv (',')
-
-
-Typically you can stick to the defaults, maybe with the exception of the
-interface specification (in case `/dev/ttyUSB0` is not what you need, certainly
-under Windows). In my hands, the default TIMEOUT is enough for reading saved
-data.  For live data 0.3s work for me. If timeout is too short, you will get
-truncated data or a crash so make sure to choose a sufficient timeout.
 
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
