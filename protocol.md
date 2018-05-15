@@ -52,7 +52,7 @@ Code | Command           | Description
 0x11 | get-live-data     | Read the current measurement
 0x12 | get-saved-data    | Read manually stored data registers (1-99)
 0x13 | get-logger-data   | Read logger data
-0x14 | –                 | Does not exist but is in original docs
+0x14 | –                 | Does not exist although mentioned in original docs
 
 After receiving one of these commands, the instrument returns a binary blob
 that requires decoding. The structure of these blobs is described in the next
@@ -79,24 +79,24 @@ Magic number: 0xaadd
 
 Record format:
 
-Pos | Bytes | Content  | Type  | Comment
-----|-------|----------|-------|----------------------
-0   | 1     | 0x00     | –     | reserved
-1   | 1     | year     | BCD   | date: year, 2 digits
-2   | 1     | weekday  | BCD   | date: weekday [1, 7]
-3   | 1     | month    | BCD   | date: month
-4   | 1     | day      | BCD   | date: day
-5   | 1     | hour     | BCD   | time: hours
-6   | 1     | minute   | BCD   | time: minutes
-7   | 1     | second   | BCD   | time: seconds
-8   | 1     | valH     | Uchar | value: higher 2 digits
-9   | 1     | valL     | Uchar | value: lower 2 digits
-10  | 1     | rawvalH  | Uchar | raw value: higher 2 digits
-11  | 1     | rawvalL  | Uchar | raw value: lower 2 digits
-12  | 1     | stat0    | bin   | Status byte 0        
-13  | 1     | stat1    | bin   | Status byte 1
-14  | 1     | mem_no   | bin   | Number of saved data records
-15  | 1     | read_no  | bin   | ?
+Bytes | Content  | Type  | Comment
+------|----------|-------|----------------------
+1     | 0x00     | –     | reserved
+1     | year     | BCD   | date: year, 2 digits
+1     | weekday  | BCD   | date: weekday [1, 7]
+1     | month    | BCD   | date: month
+1     | day      | BCD   | date: day
+1     | hour     | BCD   | time: hours
+1     | minute   | BCD   | time: minutes
+1     | second   | BCD   | time: seconds
+1     | valH     | Uchar | value: higher 2 digits
+1     | valL     | Uchar | value: lower 2 digits
+1     | rawvalH  | Uchar | raw value: higher 2 digits
+1     | rawvalL  | Uchar | raw value: lower 2 digits
+1     | stat0    | bin   | Status byte 0        
+1     | stat1    | bin   | Status byte 1
+1     | mem_no   | bin   | Number of saved data records
+1     | read_no  | bin   | ?
 
 In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
 `rawvalue` contains the absolute reading (that would be measured without *rel*
@@ -119,32 +119,32 @@ bytes are all 0x00.
 
 Record format:
 
-Pos | Bytes |  Content  | Type  | Comment
-----|-------|-----------|-------|----------------------
-0   | 1     |  0x00     | –     | reserved
-1   | 1     |  year     | BCD   | date: year, 2 digits
-2   | 1     |  weekday  | BCD   | date: weekday [1,7]
-3   | 1     |  month    | BCD   | date: month
-4   | 1     |  day      | BCD   | date: day
-5   | 1     |  hour     | BCD   | time: hour
-6   | 1     |  minute   | BCD   | time: minute
-7   | 1     |  second   | BCD   | time: second
-8   | 1     |  pos      | Uchar | storage position [1,99]
-9   | 1     |  datH     | Uchar | value: higher 2 digits
-10  | 1     |  datL     | Uchar | value: lower 2 digits
-11  | 1     |  stat0    | bin   | Status byte 0        
-12  | 1     |  stat1    | bin   | Status byte 1
+Bytes |  Content  | Type  | Comment
+------|-----------|-------|----------------------
+1     |  0x00     | –     | reserved
+1     |  year     | BCD   | date: year, 2 digits
+1     |  weekday  | BCD   | date: weekday [1,7]
+1     |  month    | BCD   | date: month
+1     |  day      | BCD   | date: day
+1     |  hour     | BCD   | time: hour
+1     |  minute   | BCD   | time: minute
+1     |  second   | BCD   | time: second
+1     |  pos      | Uchar | storage position [1,99]
+1     |  valH     | Uchar | value: higher 2 digits
+1     |  valL     | Uchar | value: lower 2 digits
+1     |  stat0    | bin   | Status byte 0        
+1     |  stat1    | bin   | Status byte 1
 
 
-The data value uses a variety of BCD on byte level. datH and datL are not BCD
+The data value uses a variety of BCD on byte level. valH and valL are not BCD
 encoded, themselves.
 
-    value = Stat0_sign * (100 * datH + datL) * Flevel
+    value = Stat0_sign * (100 * valH + valL) * Frange
 
 
 with:
 
-Range | Flevel
+Range | Frange
 ------|--------
 40    | 0.01
 400   | 0.1
@@ -169,12 +169,12 @@ Magic number: 0xaacc
 
 3 bytes
 
-Pos |Bytes |  Content  | Type    | Comment
-----|------|-----------|---------|-------------------------------
-0   |1     |  nogroups | Uchar   | No. of logging groups
-1   |2     |  bufsize  | UInt16  | Size of logging buffer [bytes]
+Bytes |  Content  | Type    | Comment
+------|-----------|---------|-------------------------------
+1     |  nogroups | Uchar   | No. of logging groups
+2     |  bufsize  | UInt16  | Size of logging buffer [bytes]
 
-Followed by `groups` logging records.
+Followed by `nogroups` logging records.
 
 
 #### Logging group
@@ -183,22 +183,26 @@ Magic number: 0xaa56
 
 Header of 9 bytes:
 
-Pos | Bytes |  Content  | Type  | Comment
-----|-------|-----------|-------|------------------------
-0   | 1     |  groupno  | BCD   | number of this group
-1   | 1     |  sampling | BCD   | sampling interval [s] 
-2   | 1     |  0x00     | –     | reserved
-3   | 1     |  0x00     | –     | reserved
-4   | 1     |  year     | BCD   | date: year 
-5   | 1     |  weekday  | BCD   | date: weekday [1,7]
-6   | 1     |  month    | BCD   | date: month
-7   | 1     |  day      | BCD   | date: day
-8   | 1     |  hour     | BCD   | time: hour
-9   | 1     |  minute   | BCD   | time: minute
-10  | 1     |  second   | BCD   | time: second
+Bytes |  Content  | Type  | Comment
+------|-----------|-------|------------------------
+1     |  groupno  | BCD   | number of this group
+1     |  sampling | BCD   | sampling interval [s] 
+1     |  0x00     | –     | reserved
+1     |  0x00     | –     | reserved
+1     |  year     | BCD   | year 
+1     |  weekday  | BCD   | weekday [1,7]
+1     |  month    | BCD   | month
+1     |  day      | BCD   | day
+1     |  hour     | BCD   | hour
+1     |  minute   | BCD   | minute
+1     |  second   | BCD   | second
 
 Followed by an unknown number of data-point records.  So we need to read until
-we hit the next magic numner for a logging group or EOF.
+we hit the next magic number for a logging group or EOF.
+
+This is actually safe, as the magic number is larger than the largest possible 
+measurement and thus cannot be encountered by chance.
+
 
 #### logging datapoint record
 
@@ -206,13 +210,14 @@ Magix number: None
 
 Pos | Bytes |  Content  | Type  | Comment
 ----|-------|-----------|-------|----------------------
-0   | 1     |  datH     | Uchar | value: higher 2 digits
-1   | 1     |  datL     | Uchar | value: lower 2 digits
+0   | 1     |  valH     | Uchar | value: higher 2 digits
+1   | 1     |  valL     | Uchar | value: lower 2 digits
 2   | 1     |  Stat0    | bin   | Stat0 byte
 
-See above (manually stored data) for interpretation of datH and datL.
-As no Stat1 byte is present, there is no `sign` value. It is unlcear how
+See above (manually stored data) for interpretation of valH and valL.
+As no Stat1 byte is present, there is no `sign` value. It is unclear how
 negative readings (in rel mode) should be handled.
+
 
 ## Status bytes
 
