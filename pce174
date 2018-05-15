@@ -7,18 +7,13 @@ or compatible devices like the Extech HD450
 """
 
 # todo
+#   - add tethered logging functionality: i.e. keep reading live data in specified intervals
 #   - find out how to send simultaneous key presses (if possible)
 #   - maybe round output or assemble values in BCD to avoid funny numerical artifacts?
-#   - add some checks for data integrity/completeness?
 #   - what is memload? is this a usefull name
 #   - what is read_no in live data?
-#   - test, test, test
 
-import sys, argparse
-import serial, time
-import warnings
-import binascii
-from datetime import *
+import sys, argparse, serial, binascii, warnings, datetime
 from collections import OrderedDict
 # requires construct ≥ 2.8 (tested with 2.9)
 from construct import * 
@@ -34,62 +29,65 @@ __license__     = "MIT License"
 def main():
     "The main function"
 
-    global args
     args = getargs()
+    cmdset = get_commandset()
 
     if args.list:
         print("Available commands:\n")
-        for key, value in cmd.items():
+        for key, value in cmdset.items():
             print(" ", key)
             print(' '*5, value['desc'])
             print(' '*5, "Button:", value['key'])
             if value['ret']:
                 print(' '*5, "Returns data in the specified format (-f)")
             print()
-    elif args.command in cmd:
+    elif args.command in cmdset:
         
         if len(args.file) > 0:
-            if cmd[args.command]['ret']:
+            if cmdset[args.command]['ret']:
                 infile = open(args.file, 'rb')
                 blob = infile.read()
                 infile.close()
             else:
                 sys.exit("Cannot run command '%s' from file - no data expected." % (args.command))
         else:
-            try:
-                iface = serial.Serial(port=args.interface, baudrate=9600, bytesize=8, parity='N', stopbits=1, timeout=0.1)
-            except:
-                sys.exit("Unable to connect to device.") 
+            blob = send_command(args.interface, args.command)
 
-            blob = send_command(iface, args.command)
-            iface.close()
-
-        if cmd[args.command]['ret']: # read data
+        if cmdset[args.command]['ret']: # read data
             if args.format == "raw":
                 sys.stdout.buffer.write(blob)
             elif args.format == "hex":
                 sys.stdout.buffer.write(binascii.hexlify(blob))
             elif args.format in ("csv", "repr", "construct"):
-                print(decode_blob(args.command, blob))
+                print(decode_blob(args.command, args.format, blob, args.sep))
     else:
         sys.exit("Unknown command")
 
-def send_command(iface, command):
+
+
+
+def send_command(interface, command):
     """Send command to instrument
 
-    command : must be one of the valid command strings defiend in cmd
-    ifce    : where the binary command is written to. Typically the 
-              respective usb-serial interface like /dev/ttyUSB0
+    iface    : string indicating the serial interface to use. E.g. /dev/ttyUSB0
+    command  : must be one of the valid command strings defined in commandset
 
     returns the binary blob that is receiven in response or empty byte array
     """
 
+    try:
+        iface = serial.Serial(port=interface, baudrate=9600, bytesize=8, parity='N', stopbits=1, timeout=0.1)
+    except:
+        sys.exit("Unable to connect to device.") 
+
+    cmdset = get_commandset()
+
     hello = b"\x87\x83"	# command prefix
-    msg = hello + cmd[args.command]['cmd']
+    msg = hello + cmdset[command]['cmd']
     iface.write(msg)
     
     blob = b''
-    if cmd[command]['ret']:
+    if cmdset[command]['ret']:
         #blob = iface.read(100000)
         while True:
             byte = iface.read(1)
@@ -97,6 +95,8 @@ def send_command(iface, command):
                 blob += byte
             else:
                 break
+    
+    iface.close()
 
     return(blob)
 
@@ -109,7 +109,7 @@ def getargs():
     parser.add_argument('-l', '--list', dest='list', action='store_true', help="list all available commands")
     parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to (/dev/ttyUSB0)")
     parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv', 'repr', 'construct', 'raw', 'hex'], help="specify output format (csv)")
-    parser.add_argument('-T', '--sampling',  dest="sampling", type=int, default=0, help="set sampling interval for tethered logging [s]. See get-live-data command (0)")
+    #parser.add_argument('-T', '--sampling',  dest="sampling", type=int, default=0, help="set sampling interval for tethered logging [s]. See get-live-data command (0)")
     parser.add_argument('-F', '--file', dest="file", type=str, default="", help="parse previously saved raw data instead of reading from the instrument")
     parser.add_argument('-s', '--sep', dest="sep", type=str, default=",", help="separator for csv (',')") 
     parser.add_argument('command', nargs='?', type=str, help="command to send to instrument")
@@ -135,31 +135,31 @@ def bcd2int(dat):
     return(ret)
 
 
-def decode_blob(cmd, blob):
+def decode_blob(cmd, outformat, blob, sep):
     """return decoded data
     
-    Central dispatch for the different parsing, processing nd csv translationn steps
+    Central dispatch for the different parsing, processing and csv translation steps
     """
 
     ret = None
     if cmd == "get-live-data":
         ret = parse_live_data(blob)
-        if args.format in ('csv', 'repr'):
+        if outformat in ('csv', 'repr'):
             ret = process_live_data(ret)
-        if args.format == ('csv'):
-            ret = live_data2csv(ret)
+        if outformat == ('csv'):
+            ret = live_data2csv(ret, sep)
     elif cmd == "get-saved-data":
         ret = parse_saved_data(blob)
-        if args.format in ('csv', 'repr'):
+        if outformat in ('csv', 'repr'):
             ret = process_saved_data(ret)
-        if args.format == ('csv'):
-            ret = saved_data2csv(ret)
+        if outformat == ('csv'):
+            ret = saved_data2csv(ret, sep)
     elif cmd == "get-logger-data":
         ret = parse_logger_data(blob)
-        if args.format in ('csv', 'repr'):
+        if outformat in ('csv', 'repr'):
             ret = process_logger_data(ret)
-        if args.format == ('csv'):
-            ret = logger_data2csv(ret)
+        if outformat == ('csv'):
+            ret = logger_data2csv(ret, sep)
     else:
         raise Exception('Unknown command.')
 
@@ -170,7 +170,7 @@ def parse_live_data(blob):
     """parse live data to construct container
     
     Accept a binary blob of live data and parse it.
-    Returns a construct container object with paresed data.
+    Returns a construct container object with parsed data.
     """
 
     Live_data = Struct(
@@ -253,14 +253,14 @@ def process_live_data(rec):
     return(rec)
 
 
-def live_data2csv(dat):
+def live_data2csv(dat, sep):
     """returns csv from live data dict"""
     
     # define columns and assemble header
     cols = ('date', 'time', 'value', 'rawvalue', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload', 'mem_no', 'read_no')
-    csv = [args.sep.join(cols)]
+    csv = [sep.join(cols)]
 
-    csv.append(args.sep.join(([str(dat[col]) for col in cols])))
+    csv.append(sep.join(([str(dat[col]) for col in cols])))
     
     return("\n".join(csv))
 
@@ -269,7 +269,7 @@ def parse_saved_data(blob):
     """parse saved data to construct container
 
     Accept a binary blob of saved data and parse it.
-    Returns a cosntruct container object with paresed data.
+    Returns a construct container object with parsed data.
     """
 
     record = Struct(
@@ -335,7 +335,7 @@ def process_saved_data(dat):
         stat0 = decode_stat0(rec['stat0'])
         stat1 = decode_stat1(rec['stat1'])
 
-        dtime = datetime(2000+rec['year'], rec['month'], rec['day'], rec['hour'], rec['minute'], rec['second'])
+        dtime = datetime.datetime(2000+rec['year'], rec['month'], rec['day'], rec['hour'], rec['minute'], rec['second'])
 
         # reassemble the record in a more practical format
         rec = {
@@ -358,14 +358,14 @@ def process_saved_data(dat):
     return(dat2)
 
 
-def saved_data2csv(dat):
+def saved_data2csv(dat, sep):
     "returns csv from live data dict"
 
     cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload')
-    csv = [args.sep.join(cols)]
+    csv = [sep.join(cols)]
     for rec in dat:
         if rec['pos'] > 0:
-            csv.append(args.sep.join(([str(rec[col]) for col in cols])))
+            csv.append(sep.join(([str(rec[col]) for col in cols])))
     
     return("\n".join(csv))
 
@@ -440,7 +440,7 @@ def process_logger_data(dat):
         for key in ['year', 'weekday', 'month', 'day', 'hour', 'minute', 'second']:
             group[key] = bcd2int(group[key])
 
-        dtime = datetime(2000+group['year'], group['month'], group['day'], group['hour'], group['minute'], group['second'])
+        dtime = datetime.datetime(2000+group['year'], group['month'], group['day'], group['hour'], group['minute'], group['second'])
 
         for i, rec in enumerate(group['data']): 
 
@@ -463,18 +463,18 @@ def process_logger_data(dat):
                     }
 
             logger.append(rec)
-            dtime += timedelta(seconds=group['sampling'])
+            dtime += datetime.timedelta(seconds=group['sampling'])
 
     return(logger)
 
 
-def logger_data2csv(dat):
+def logger_data2csv(dat, sep):
     "returns csv from logger data list"
 
     cols = ('groupno', 'id', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO')
-    csv = [args.sep.join(cols)]
+    csv = [sep.join(cols)]
     for rec in dat:
-        csv.append(args.sep.join(([str(rec[col]) for col in cols])))
+        csv.append(sep.join(([str(rec[col]) for col in cols])))
     
     return("\n".join(csv))
 
@@ -588,121 +588,134 @@ def decode_stat1(byte):
     return(ret)
 
 
-# command definition
-cmd = OrderedDict([
-    ('units', { 
-        'cmd' : b"\xfe",	# command byte
-        'ret' : False,		# will data be returned?
-        'key' : 'UNITS',        # Equivalent key press
-        'desc': "Toggle units between lux and fc"	# description
-        }
-        ),
-    ('light', { 
-        'cmd' : b"\xfd", 
-        'ret' : False,
-        'key' : 'Light/LOAD',
-        'desc': "Toggle backlight"
-        }
-        ),
-    ('range', { 
-        'cmd' : b"\x7f", 
-        'ret' : False,
-        'key' : 'RANGE/APO',
-        'desc': "Cycle through measurement ranges"
-        }
-        ),
-    ('save', { 
-        'cmd' : b"\xfb", 
-        'ret' : False,
-        'key' : 'REC/Setup',
-        'desc': "Save reading to memory"
-        }
-        ),
-    ('peak', { 
-        'cmd' : b"\xf7", 
-        'ret' : False,
-        'key' : 'PEAK/LEFT',
-        'desc': "Toggle peak value display"
-        }
-        ),
-    ('rel', { 
-        'cmd' : b"\xdf", 
-        'ret' : False,
-        'key' : 'REL/RIGHT',
-        'desc': "Toggle realtive reading"
-        }
-        ),
-    ('minmax', { 
-        'cmd' : b"\xbf", 
-        'ret' : False,
-        'key' : 'MAX/MIN/UP',
-        'desc': "Toggle Min/Max/current value display "
-        }
-        ),
-    ('hold', { 
-        'cmd' : b"\xef", 
-        'ret' : False,
-        'key' : 'HOLD/DOWN',
-        'desc': "Toggle hold"
-        }
-        ),
-    ('off', { 
-        'cmd' : b"\xf3", 
-        'ret' : False,
-        'key' : 'POWER',
-        'desc': "Turn off the instrument"
-        }
-        ),
-    ('logging', { 
-        'cmd' : b"\xdc", 
-        'ret' : False,
-        'key' : 'REC-hold',
-        'desc': "Start/stop data logging"
-        }
-        ),
-    ('prevview', { 
-        'cmd' : b"\xda", 
-        'ret' : False,
-        'key' : 'PEAK-hold',
-        'desc': "Switch to previous display view mode"
-        }
-        ),
-    ('nextview', { 
-        'cmd' : b"\xdb", 
-        'ret' : False,
-        'key' : 'REL-hold',
-        'desc': "Switch to next display view mode"
-        }
-        ),
-    ('viewsaved', { 
-        'cmd' : b"\xde", 
-        'ret' : False,
-        'key' : 'LIGHT/LOAD-hold',
-        'desc': "Toggle view mode for saved data"
-        }
-        ),
-    ('get-live-data', { 
-        'cmd' : b"\x11", 
-        'ret' : True,
-        'key' : None,
-        'desc': "Read live data"
-        }
-        ),
-    ('get-saved-data', { 
-        'cmd' : b"\x12", 
-        'ret' : True,
-        'key' : None,
-        'desc': "Read manually saved data (registers 1-99)"
-        }
-        ),
-    ('get-logger-data', { 
-        'cmd' : b"\x13", 
-        'ret' : True,
-        'key' : None,
-        'desc': "Read logger data"
-        }
-        )
-    ])
+def get_commandset():
+    """return command definition dict
+
+    Actually, an ordered dict of dicts. 
+    Each inner dict represents a valid command and has the following keys:
+
+    cmd     command byte (sent to instrument)
+    ret     boolean indicating if any data will be returned by the instrument in response
+    key     equivalent key press on the instrument. None if no such key press exists
+    desc    brief command description
+    """
+
+    cmd = OrderedDict([
+        ('units', { 
+            'cmd' : b"\xfe",	# command byte
+            'ret' : False,		# will data be returned?
+            'key' : 'UNITS',        # Equivalent key press
+            'desc': "Toggle units between lux and fc"	# description
+            }
+            ),
+        ('light', { 
+            'cmd' : b"\xfd", 
+            'ret' : False,
+            'key' : 'Light/LOAD',
+            'desc': "Toggle backlight"
+            }
+            ),
+        ('range', { 
+            'cmd' : b"\x7f", 
+            'ret' : False,
+            'key' : 'RANGE/APO',
+            'desc': "Cycle through measurement ranges"
+            }
+            ),
+        ('save', { 
+            'cmd' : b"\xfb", 
+            'ret' : False,
+            'key' : 'REC/Setup',
+            'desc': "Save reading to memory"
+            }
+            ),
+        ('peak', { 
+            'cmd' : b"\xf7", 
+            'ret' : False,
+            'key' : 'PEAK/LEFT',
+            'desc': "Toggle peak value display"
+            }
+            ),
+        ('rel', { 
+            'cmd' : b"\xdf", 
+            'ret' : False,
+            'key' : 'REL/RIGHT',
+            'desc': "Toggle realtive reading"
+            }
+            ),
+        ('minmax', { 
+            'cmd' : b"\xbf", 
+            'ret' : False,
+            'key' : 'MAX/MIN/UP',
+            'desc': "Toggle Min/Max/current value display "
+            }
+            ),
+        ('hold', { 
+            'cmd' : b"\xef", 
+            'ret' : False,
+            'key' : 'HOLD/DOWN',
+            'desc': "Toggle hold"
+            }
+            ),
+        ('off', { 
+            'cmd' : b"\xf3", 
+            'ret' : False,
+            'key' : 'POWER',
+            'desc': "Turn off the instrument"
+            }
+            ),
+        ('logging', { 
+            'cmd' : b"\xdc", 
+            'ret' : False,
+            'key' : 'REC-hold',
+            'desc': "Start/stop data logging"
+            }
+            ),
+        ('prevview', { 
+            'cmd' : b"\xda", 
+            'ret' : False,
+            'key' : 'PEAK-hold',
+            'desc': "Switch to previous display view mode"
+            }
+            ),
+        ('nextview', { 
+            'cmd' : b"\xdb", 
+            'ret' : False,
+            'key' : 'REL-hold',
+            'desc': "Switch to next display view mode"
+            }
+            ),
+        ('viewsaved', { 
+            'cmd' : b"\xde", 
+            'ret' : False,
+            'key' : 'LIGHT/LOAD-hold',
+            'desc': "Toggle view mode for saved data"
+            }
+            ),
+        ('get-live-data', { 
+            'cmd' : b"\x11", 
+            'ret' : True,
+            'key' : None,
+            'desc': "Read live data"
+            }
+            ),
+        ('get-saved-data', { 
+            'cmd' : b"\x12", 
+            'ret' : True,
+            'key' : None,
+            'desc': "Read manually saved data (registers 1-99)"
+            }
+            ),
+        ('get-logger-data', { 
+            'cmd' : b"\x13", 
+            'ret' : True,
+            'key' : None,
+            'desc': "Read logger data"
+            }
+            )
+        ])
+
+    return(cmd)
 
 
 if __name__ == "__main__":
