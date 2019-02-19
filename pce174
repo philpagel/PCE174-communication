@@ -76,17 +76,9 @@ def send_command(interface, command):
     returns the binary blob that is receiven in response or empty byte array
     """
 
-    try:
-        iface = serial.Serial(
-            port=interface,
-            baudrate=9600,
-            bytesize=8,
-            parity="N",
-            stopbits=1,
-            timeout=0.1,
-        )
-    except:
-        sys.exit("Unable to connect to device.")
+    iface = serial.Serial(
+        port=interface, baudrate=9600, bytesize=8, parity="N", stopbits=1, timeout=0.1
+    )
 
     cmdset = get_commandset()
 
