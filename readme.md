@@ -123,6 +123,9 @@ like this:
       -s SEP, --sep SEP     separator for csv (',')
 
 
+On Linux, you might need to configure your user account to have access to
+/dev/ttyUSB0. Alternatively you can run using sudo.
+
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
 key presses on the instrument. See *Button* entry for this information.
