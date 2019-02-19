@@ -94,6 +94,9 @@ If it is not provided by your distribution just install a local version:
 
     pip install construct
 
+It is also necessary to install pyserial, as follows:
+
+    pip install pyserial
 
 ## Usage
 
