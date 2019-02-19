@@ -15,15 +15,15 @@ or compatible devices like the Extech HD450
 
 import sys, argparse, serial, binascii, warnings, datetime
 from collections import OrderedDict
+
 # requires construct ≥ 2.8 (tested with 2.9)
-from construct import * 
+from construct import *
 
-__version__     = "0.3"
-__status__      = "Prototype"
-__author__      = "Philipp Pagel"
-__copyright__   = "Copyright 2018, Philipp Pagel"
-__license__     = "MIT License"
-
+__version__ = "0.3"
+__status__ = "Prototype"
+__author__ = "Philipp Pagel"
+__copyright__ = "Copyright 2018, Philipp Pagel"
+__license__ = "MIT License"
 
 
 def main():
@@ -36,24 +36,27 @@ def main():
         print("Available commands:\n")
         for key, value in cmdset.items():
             print(" ", key)
-            print(' '*5, value['desc'])
-            print(' '*5, "Button:", value['key'])
-            if value['ret']:
-                print(' '*5, "Returns data in the specified format (-f)")
+            print(" " * 5, value["desc"])
+            print(" " * 5, "Button:", value["key"])
+            if value["ret"]:
+                print(" " * 5, "Returns data in the specified format (-f)")
             print()
     elif args.command in cmdset:
-        
+
         if len(args.file) > 0:
-            if cmdset[args.command]['ret']:
-                infile = open(args.file, 'rb')
+            if cmdset[args.command]["ret"]:
+                infile = open(args.file, "rb")
                 blob = infile.read()
                 infile.close()
             else:
-                sys.exit("Cannot run command '%s' from file - no data expected." % (args.command))
+                sys.exit(
+                    "Cannot run command '%s' from file - no data expected."
+                    % (args.command)
+                )
         else:
             blob = send_command(args.interface, args.command)
 
-        if cmdset[args.command]['ret']: # read data
+        if cmdset[args.command]["ret"]:  # read data
             if args.format == "raw":
                 sys.stdout.buffer.write(blob)
             elif args.format == "hex":
@@ -62,8 +65,6 @@ def main():
                 print(decode_blob(args.command, args.format, blob, args.sep))
     else:
         sys.exit("Unknown command")
-
-
 
 
 def send_command(interface, command):
@@ -76,29 +77,36 @@ def send_command(interface, command):
     """
 
     try:
-        iface = serial.Serial(port=interface, baudrate=9600, bytesize=8, parity='N', stopbits=1, timeout=0.1)
+        iface = serial.Serial(
+            port=interface,
+            baudrate=9600,
+            bytesize=8,
+            parity="N",
+            stopbits=1,
+            timeout=0.1,
+        )
     except:
-        sys.exit("Unable to connect to device.") 
+        sys.exit("Unable to connect to device.")
 
     cmdset = get_commandset()
 
-    hello = b"\x87\x83"	# command prefix
-    msg = hello + cmdset[command]['cmd']
+    hello = b"\x87\x83"  # command prefix
+    msg = hello + cmdset[command]["cmd"]
     iface.write(msg)
-    
-    blob = b''
-    if cmdset[command]['ret']:
-        #blob = iface.read(100000)
+
+    blob = b""
+    if cmdset[command]["ret"]:
+        # blob = iface.read(100000)
         while True:
             byte = iface.read(1)
-            if len(byte) > 0: 
+            if len(byte) > 0:
                 blob += byte
             else:
                 break
-    
+
     iface.close()
 
-    return(blob)
+    return blob
 
 
 def getargs():
@@ -106,15 +114,45 @@ def getargs():
 
     parser = argparse.ArgumentParser(description="Talk to a PCE-174 lightmeter/logger")
 
-    parser.add_argument('-l', '--list', dest='list', action='store_true', help="list all available commands")
-    parser.add_argument('-i', dest="interface", type=str, default='/dev/ttyUSB0', help="interface to connect to (/dev/ttyUSB0)")
-    parser.add_argument('-f', dest="format", type=str, default="csv", choices=['csv', 'repr', 'construct', 'raw', 'hex'], help="specify output format (csv)")
-    #parser.add_argument('-T', '--sampling',  dest="sampling", type=int, default=0, help="set sampling interval for tethered logging [s]. See get-live-data command (0)")
-    parser.add_argument('-F', '--file', dest="file", type=str, default="", help="parse previously saved raw data instead of reading from the instrument")
-    parser.add_argument('-s', '--sep', dest="sep", type=str, default=",", help="separator for csv (',')") 
-    parser.add_argument('command', nargs='?', type=str, help="command to send to instrument")
+    parser.add_argument(
+        "-l",
+        "--list",
+        dest="list",
+        action="store_true",
+        help="list all available commands",
+    )
+    parser.add_argument(
+        "-i",
+        dest="interface",
+        type=str,
+        default="/dev/ttyUSB0",
+        help="interface to connect to (/dev/ttyUSB0)",
+    )
+    parser.add_argument(
+        "-f",
+        dest="format",
+        type=str,
+        default="csv",
+        choices=["csv", "repr", "construct", "raw", "hex"],
+        help="specify output format (csv)",
+    )
+    # parser.add_argument('-T', '--sampling',  dest="sampling", type=int, default=0, help="set sampling interval for tethered logging [s]. See get-live-data command (0)")
+    parser.add_argument(
+        "-F",
+        "--file",
+        dest="file",
+        type=str,
+        default="",
+        help="parse previously saved raw data instead of reading from the instrument",
+    )
+    parser.add_argument(
+        "-s", "--sep", dest="sep", type=str, default=",", help="separator for csv (',')"
+    )
+    parser.add_argument(
+        "command", nargs="?", type=str, help="command to send to instrument"
+    )
 
-    return(parser.parse_args())
+    return parser.parse_args()
 
 
 def bcd2int(dat):
@@ -126,13 +164,13 @@ def bcd2int(dat):
     ret = 0
     f = 1
     while dat != 0:
-        val = dat & 0x0f
+        val = dat & 0x0F
         if val > 9:
             warnings.warn("Pseudo-tetrade encountered in BCD conversion.")
         ret += f * val
         f *= 10
         dat = dat >> 4
-    return(ret)
+    return ret
 
 
 def decode_blob(cmd, outformat, blob, sep):
@@ -144,26 +182,26 @@ def decode_blob(cmd, outformat, blob, sep):
     ret = None
     if cmd == "get-live-data":
         ret = parse_live_data(blob)
-        if outformat in ('csv', 'repr'):
+        if outformat in ("csv", "repr"):
             ret = process_live_data(ret)
-        if outformat == ('csv'):
+        if outformat == ("csv"):
             ret = live_data2csv(ret, sep)
     elif cmd == "get-saved-data":
         ret = parse_saved_data(blob)
-        if outformat in ('csv', 'repr'):
+        if outformat in ("csv", "repr"):
             ret = process_saved_data(ret)
-        if outformat == ('csv'):
+        if outformat == ("csv"):
             ret = saved_data2csv(ret, sep)
     elif cmd == "get-logger-data":
         ret = parse_logger_data(blob)
-        if outformat in ('csv', 'repr'):
+        if outformat in ("csv", "repr"):
             ret = process_logger_data(ret)
-        if outformat == ('csv'):
+        if outformat == ("csv"):
             ret = logger_data2csv(ret, sep)
     else:
-        raise Exception('Unknown command.')
+        raise Exception("Unknown command.")
 
-    return(ret)
+    return ret
 
 
 def parse_live_data(blob):
@@ -174,26 +212,26 @@ def parse_live_data(blob):
     """
 
     Live_data = Struct(
-            'magic' / Const(b'\xaa\xdd'),
-            Padding(1),
-            'year'    / Int8ub,
-            'weekday' / Int8ub,
-            'month'   / Int8ub,
-            'day'     / Int8ub,
-            'hour'    / Int8ub,
-            'minute'  / Int8ub,
-            'second'  / Int8ub,
-            'dat0H'   / Int8ub,
-            'dat0L'   / Int8ub,
-            'dat1H'   / Int8ub,
-            'dat1L'   / Int8ub,
-            'stat0'   / Int8ub,
-            'stat1'   / Int8ub,
-            'mem_no'  / Int8ub,
-            'read_no' / Int8ub
-            )
+        "magic" / Const(b"\xaa\xdd"),
+        Padding(1),
+        "year" / Int8ub,
+        "weekday" / Int8ub,
+        "month" / Int8ub,
+        "day" / Int8ub,
+        "hour" / Int8ub,
+        "minute" / Int8ub,
+        "second" / Int8ub,
+        "dat0H" / Int8ub,
+        "dat0L" / Int8ub,
+        "dat1H" / Int8ub,
+        "dat1L" / Int8ub,
+        "stat0" / Int8ub,
+        "stat1" / Int8ub,
+        "mem_no" / Int8ub,
+        "read_no" / Int8ub,
+    )
 
-    return(Live_data.parse(blob))
+    return Live_data.parse(blob)
 
 
 def process_live_data(rec):
@@ -226,43 +264,58 @@ def process_live_data(rec):
     """
 
     # bcd decoding
-    for key in ['year', 'weekday', 'month', 'day', 'hour', 'minute', 'second']:
+    for key in ["year", "weekday", "month", "day", "hour", "minute", "second"]:
         rec[key] = bcd2int(rec[key])
 
-    stat0 = decode_stat0(rec['stat0'])
-    stat1 = decode_stat1(rec['stat1'])
+    stat0 = decode_stat0(rec["stat0"])
+    stat1 = decode_stat1(rec["stat1"])
 
     # reassemble the record in a more practical format
     rec = {
-            'date'     : "20%2.2i-%2.2i-%2.2i" % (rec['year'], rec['month'], rec['day']),
-            'time'     : "%2.2i:%2.2i:%2.2i" % (rec['hour'], rec['minute'], rec['second']),
-            'value'    : stat1['sign'] * (100*rec['dat1H'] + rec['dat1L']) * stat0['Frange'],
-            'rawvalue' : (100*rec['dat0H'] + rec['dat0L']) * stat0['Frange'],
-            'unit'     : stat0['unit'],
-            'range'    : stat0['range'],
-            'mode'     : stat0['mode'],
-            'hold'     : stat0['hold'],
-            'APO'      : stat0['APO'],
-            'power'    : stat1['power'],
-            'dispmode' : stat1['dispmode'],
-            'memload'  : stat1['memload'],
-            'mem_no'   : rec['mem_no'],
-            'read_no'  : rec['read_no']
-            }
+        "date": "20%2.2i-%2.2i-%2.2i" % (rec["year"], rec["month"], rec["day"]),
+        "time": "%2.2i:%2.2i:%2.2i" % (rec["hour"], rec["minute"], rec["second"]),
+        "value": stat1["sign"] * (100 * rec["dat1H"] + rec["dat1L"]) * stat0["Frange"],
+        "rawvalue": (100 * rec["dat0H"] + rec["dat0L"]) * stat0["Frange"],
+        "unit": stat0["unit"],
+        "range": stat0["range"],
+        "mode": stat0["mode"],
+        "hold": stat0["hold"],
+        "APO": stat0["APO"],
+        "power": stat1["power"],
+        "dispmode": stat1["dispmode"],
+        "memload": stat1["memload"],
+        "mem_no": rec["mem_no"],
+        "read_no": rec["read_no"],
+    }
 
-    return(rec)
+    return rec
 
 
 def live_data2csv(dat, sep):
     """returns csv from live data dict"""
-    
+
     # define columns and assemble header
-    cols = ('date', 'time', 'value', 'rawvalue', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload', 'mem_no', 'read_no')
+    cols = (
+        "date",
+        "time",
+        "value",
+        "rawvalue",
+        "unit",
+        "range",
+        "mode",
+        "hold",
+        "APO",
+        "power",
+        "dispmode",
+        "memload",
+        "mem_no",
+        "read_no",
+    )
     csv = [sep.join(cols)]
 
     csv.append(sep.join(([str(dat[col]) for col in cols])))
-    
-    return("\n".join(csv))
+
+    return "\n".join(csv)
 
 
 def parse_saved_data(blob):
@@ -273,28 +326,25 @@ def parse_saved_data(blob):
     """
 
     record = Struct(
-            'foo'   / Int8ub, # should be 0x00 but isn't always
-            #'magic' / Const(b'\x00'),
-            'year'  / Int8ub,
-            'week'  / Int8ub,
-            'month' / Int8ub,
-            'day'   / Int8ub,
-            'hour'  / Int8ub,
-            'minute'/ Int8ub,
-            'second'/ Int8ub,
-            'pos'   / Int8ub,
-            'datH'  / Int8ub,
-            'datL'  / Int8ub,
-            'stat0' / Int8ub,
-            'stat1' / Int8ub
-           )
+        "foo" / Int8ub,  # should be 0x00 but isn't always
+        #'magic' / Const(b'\x00'),
+        "year" / Int8ub,
+        "week" / Int8ub,
+        "month" / Int8ub,
+        "day" / Int8ub,
+        "hour" / Int8ub,
+        "minute" / Int8ub,
+        "second" / Int8ub,
+        "pos" / Int8ub,
+        "datH" / Int8ub,
+        "datL" / Int8ub,
+        "stat0" / Int8ub,
+        "stat1" / Int8ub,
+    )
 
-    db = Struct(
-            'magic' / Const(b'\xbb\x88'),
-            'data'  / Array(99, record)
-            )
-    
-    return(db.parse(blob))
+    db = Struct("magic" / Const(b"\xbb\x88"), "data" / Array(99, record))
+
+    return db.parse(blob)
 
 
 def process_saved_data(dat):
@@ -325,49 +375,71 @@ def process_saved_data(dat):
     """
 
     dat2 = []
-    for rec in dat['data']:
-        if rec['pos'] == 0:
+    for rec in dat["data"]:
+        if rec["pos"] == 0:
             break
         # bcd decoding
-        for key in ['year', 'week', 'month', 'day', 'hour', 'minute', 'second']:
+        for key in ["year", "week", "month", "day", "hour", "minute", "second"]:
             rec[key] = bcd2int(rec[key])
 
-        stat0 = decode_stat0(rec['stat0'])
-        stat1 = decode_stat1(rec['stat1'])
+        stat0 = decode_stat0(rec["stat0"])
+        stat1 = decode_stat1(rec["stat1"])
 
-        dtime = datetime.datetime(2000+rec['year'], rec['month'], rec['day'], rec['hour'], rec['minute'], rec['second'])
+        dtime = datetime.datetime(
+            2000 + rec["year"],
+            rec["month"],
+            rec["day"],
+            rec["hour"],
+            rec["minute"],
+            rec["second"],
+        )
 
         # reassemble the record in a more practical format
         rec = {
-                'pos'      : rec['pos'],
-                'date'      : dtime.date(),
-                'time'      : dtime.time(),
-                'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
-                'unit'     : stat0['unit'],
-                'range'    : stat0['range'],
-                'mode'     : stat0['mode'],
-                'hold'     : stat0['hold'],
-                'APO'      : stat0['APO'],
-                'power'    : stat1['power'],
-                'dispmode' : stat1['dispmode'],
-                'memload'  : stat1['memload']
-                }
+            "pos": rec["pos"],
+            "date": dtime.date(),
+            "time": dtime.time(),
+            "value": stat1["sign"]
+            * (100 * rec["datH"] + rec["datL"])
+            * stat0["Frange"],
+            "unit": stat0["unit"],
+            "range": stat0["range"],
+            "mode": stat0["mode"],
+            "hold": stat0["hold"],
+            "APO": stat0["APO"],
+            "power": stat1["power"],
+            "dispmode": stat1["dispmode"],
+            "memload": stat1["memload"],
+        }
 
         dat2.append(rec)
 
-    return(dat2)
+    return dat2
 
 
 def saved_data2csv(dat, sep):
     "returns csv from live data dict"
 
-    cols = ('pos', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO', 'power', 'dispmode', 'memload')
+    cols = (
+        "pos",
+        "date",
+        "time",
+        "value",
+        "unit",
+        "range",
+        "mode",
+        "hold",
+        "APO",
+        "power",
+        "dispmode",
+        "memload",
+    )
     csv = [sep.join(cols)]
     for rec in dat:
-        if rec['pos'] > 0:
+        if rec["pos"] > 0:
             csv.append(sep.join(([str(rec[col]) for col in cols])))
-    
-    return("\n".join(csv))
+
+    return "\n".join(csv)
 
 
 def parse_logger_data(blob):
@@ -378,37 +450,37 @@ def parse_logger_data(blob):
     """
 
     Datapoint = Struct(
-            'datH'  / Int8ub,
-            'datL'  / Int8ub,
-            'stat0' / Int8ub,
-            'next'  / Peek(Int16ub)
-            )
+        "datH" / Int8ub, "datL" / Int8ub, "stat0" / Int8ub, "next" / Peek(Int16ub)
+    )
 
     Group = Struct(
-            'magic'     / Const(b'\xaa\x56'),
-            'groupno'   / Int8ub,
-            'sampling'  / Int8ub,
-            'reserved'  / Const(b'\x00\x00'),
-            'year'      / Int8ub,
-            'weekday'   / Int8ub,
-            'month'     / Int8ub,
-            'day'       / Int8ub,
-            'hour'      / Int8ub,
-            'minute'    / Int8ub,
-            'second'    / Int8ub,
-            'data'      / RepeatUntil(lambda x, lst, ctx: x.next==0xaa56 or x.next==None, Datapoint)
-            )
+        "magic" / Const(b"\xaa\x56"),
+        "groupno" / Int8ub,
+        "sampling" / Int8ub,
+        "reserved" / Const(b"\x00\x00"),
+        "year" / Int8ub,
+        "weekday" / Int8ub,
+        "month" / Int8ub,
+        "day" / Int8ub,
+        "hour" / Int8ub,
+        "minute" / Int8ub,
+        "second" / Int8ub,
+        "data"
+        / RepeatUntil(
+            lambda x, lst, ctx: x.next == 0xAA56 or x.next == None, Datapoint
+        ),
+    )
 
     db = Struct(
-            'magic'    / Const(b'\xaa\xcc'),
-            'nogroups' / Int8ub,
-            'bufsize'  / Int16ub,
-            'groups'   / Array(this.nogroups, Group)
-            )
+        "magic" / Const(b"\xaa\xcc"),
+        "nogroups" / Int8ub,
+        "bufsize" / Int16ub,
+        "groups" / Array(this.nogroups, Group),
+    )
 
     dat = db.parse(blob)
 
-    return(dat)
+    return dat
 
 
 def process_logger_data(dat):
@@ -435,48 +507,66 @@ def process_logger_data(dat):
     """
 
     logger = []
-    for group in dat['groups']:
+    for group in dat["groups"]:
         # bcd decoding
-        for key in ['year', 'weekday', 'month', 'day', 'hour', 'minute', 'second']:
+        for key in ["year", "weekday", "month", "day", "hour", "minute", "second"]:
             group[key] = bcd2int(group[key])
 
-        dtime = datetime.datetime(2000+group['year'], group['month'], group['day'], group['hour'], group['minute'], group['second'])
+        dtime = datetime.datetime(
+            2000 + group["year"],
+            group["month"],
+            group["day"],
+            group["hour"],
+            group["minute"],
+            group["second"],
+        )
 
-        for i, rec in enumerate(group['data']): 
+        for i, rec in enumerate(group["data"]):
 
-            stat0 = decode_stat0(rec['stat0'])
+            stat0 = decode_stat0(rec["stat0"])
 
             # reassemble the record in a more practical format
             rec = {
-                    'groupno'  : group['groupno'],
-                    'id'       : i,
-                    'sampling' : group['sampling'],
-                    'date'      : dtime.date(),
-                    'time'      : dtime.time(),
-                    #'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
-                    'value'    : (100*rec['datH'] + rec['datL']) * stat0['Frange'],
-                    'unit'     : stat0['unit'],
-                    'range'    : stat0['range'],
-                    'mode'     : stat0['mode'],
-                    'hold'     : stat0['hold'],
-                    'APO'      : stat0['APO']
-                    }
+                "groupno": group["groupno"],
+                "id": i,
+                "sampling": group["sampling"],
+                "date": dtime.date(),
+                "time": dtime.time(),
+                #'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
+                "value": (100 * rec["datH"] + rec["datL"]) * stat0["Frange"],
+                "unit": stat0["unit"],
+                "range": stat0["range"],
+                "mode": stat0["mode"],
+                "hold": stat0["hold"],
+                "APO": stat0["APO"],
+            }
 
             logger.append(rec)
-            dtime += datetime.timedelta(seconds=group['sampling'])
+            dtime += datetime.timedelta(seconds=group["sampling"])
 
-    return(logger)
+    return logger
 
 
 def logger_data2csv(dat, sep):
     "returns csv from logger data list"
 
-    cols = ('groupno', 'id', 'date', 'time', 'value', 'unit', 'range', 'mode', 'hold', 'APO')
+    cols = (
+        "groupno",
+        "id",
+        "date",
+        "time",
+        "value",
+        "unit",
+        "range",
+        "mode",
+        "hold",
+        "APO",
+    )
     csv = [sep.join(cols)]
     for rec in dat:
         csv.append(sep.join(([str(rec[col]) for col in cols])))
-    
-    return("\n".join(csv))
+
+    return "\n".join(csv)
 
 
 def decode_stat0(byte):
@@ -498,48 +588,39 @@ def decode_stat0(byte):
 
     value = Stat0_sign * (100 * valH + valL) * Frange
     """
-    
+
     Stat0 = BitStruct(
-                'APO'   / Flag,
-                'hold'  / Flag,
-                'mode'  / BitsInteger(3),
-                'unit'  / Flag,
-                'range' / BitsInteger(2)
-            )
+        "APO" / Flag,
+        "hold" / Flag,
+        "mode" / BitsInteger(3),
+        "unit" / Flag,
+        "range" / BitsInteger(2),
+    )
     ret = Stat0.parse(bytes([byte]))
 
     # I know this looks wrong but that's how they implemented the range order...
-    Range = {
-            'lux' : ('400k', '400',  '4k', '40k' ),
-            'fc'  : ( '40k',  '40', '400',  '4k' )
-            }
-    
+    Range = {"lux": ("400k", "400", "4k", "40k"), "fc": ("40k", "40", "400", "4k")}
+
     mode = {
-            0b000 : 'normal',
-            0b010 : 'Pmin',
-            0b011 : 'Pmax',
-            0b100 : 'max',
-            0b101 : 'min',
-            0b110 : 'rel'
-            }
+        0b000: "normal",
+        0b010: "Pmin",
+        0b011: "Pmax",
+        0b100: "max",
+        0b101: "min",
+        0b110: "rel",
+    }
 
     # factor to set decimal point depending on range
-    Frange = {
-            '40'   : 0.01,
-            '400'  : 0.1,
-            '4k'   : 1.0,
-            '40k'  : 10,
-            '400k' : 100
-            }
+    Frange = {"40": 0.01, "400": 0.1, "4k": 1.0, "40k": 10, "400k": 100}
 
-    ret['unit'] = ('lux', 'fc')[ret['unit']]
-    ret['range'] = Range[ret['unit']][ret['range']]
-    ret['APO'] = ('on', 'off')[ret['APO']]
-    ret['mode'] = mode[ret['mode']]
-    ret['hold'] = ('cont', 'hold')[ret['hold']]
-    ret['Frange'] = Frange[ret['range']]
+    ret["unit"] = ("lux", "fc")[ret["unit"]]
+    ret["range"] = Range[ret["unit"]][ret["range"]]
+    ret["APO"] = ("on", "off")[ret["APO"]]
+    ret["mode"] = mode[ret["mode"]]
+    ret["hold"] = ("cont", "hold")[ret["hold"]]
+    ret["Frange"] = Frange[ret["range"]]
 
-    return(ret)
+    return ret
 
 
 def decode_stat1(byte):
@@ -557,35 +638,25 @@ def decode_stat1(byte):
     """
 
     Stat1 = BitStruct(
-                BitsInteger(2),
-                'power'    / Flag,
-                'sign'     / Flag,
-                'dispmode' / BitsInteger(2),
-                'memload'  / BitsInteger(2)
-            )
-    
+        BitsInteger(2),
+        "power" / Flag,
+        "sign" / Flag,
+        "dispmode" / BitsInteger(2),
+        "memload" / BitsInteger(2),
+    )
+
     ret = Stat1.parse(bytes([byte]))
-    
-    dispmode = {
-            0b00 : 'time',
-            0b01 : 'day',
-            0b10 : 'sampling',
-            0b11 : 'year',
-            }
 
-    memload = {
-            0b00 : None,
-            0b01 : 'mem',
-            0b10 : 'load',
-            0b11 : None
-            }
+    dispmode = {0b00: "time", 0b01: "day", 0b10: "sampling", 0b11: "year"}
 
-    ret['power'] = ('ok', 'low')[ret['power']]
-    ret['sign'] = (1, -1)[ret['sign']]
-    ret['dispmode'] = dispmode[ret['dispmode']]
-    ret['memload'] = memload[ret['memload']]
+    memload = {0b00: None, 0b01: "mem", 0b10: "load", 0b11: None}
 
-    return(ret)
+    ret["power"] = ("ok", "low")[ret["power"]]
+    ret["sign"] = (1, -1)[ret["sign"]]
+    ret["dispmode"] = dispmode[ret["dispmode"]]
+    ret["memload"] = memload[ret["memload"]]
+
+    return ret
 
 
 def get_commandset():
@@ -600,122 +671,146 @@ def get_commandset():
     desc    brief command description
     """
 
-    cmd = OrderedDict([
-        ('units', { 
-            'cmd' : b"\xfe",	# command byte
-            'ret' : False,		# will data be returned?
-            'key' : 'UNITS',        # Equivalent key press
-            'desc': "Toggle units between lux and fc"	# description
-            }
+    cmd = OrderedDict(
+        [
+            (
+                "units",
+                {
+                    "cmd": b"\xfe",  # command byte
+                    "ret": False,  # will data be returned?
+                    "key": "UNITS",  # Equivalent key press
+                    "desc": "Toggle units between lux and fc",  # description
+                },
             ),
-        ('light', { 
-            'cmd' : b"\xfd", 
-            'ret' : False,
-            'key' : 'Light/LOAD',
-            'desc': "Toggle backlight"
-            }
+            (
+                "light",
+                {
+                    "cmd": b"\xfd",
+                    "ret": False,
+                    "key": "Light/LOAD",
+                    "desc": "Toggle backlight",
+                },
             ),
-        ('range', { 
-            'cmd' : b"\x7f", 
-            'ret' : False,
-            'key' : 'RANGE/APO',
-            'desc': "Cycle through measurement ranges"
-            }
+            (
+                "range",
+                {
+                    "cmd": b"\x7f",
+                    "ret": False,
+                    "key": "RANGE/APO",
+                    "desc": "Cycle through measurement ranges",
+                },
             ),
-        ('save', { 
-            'cmd' : b"\xfb", 
-            'ret' : False,
-            'key' : 'REC/Setup',
-            'desc': "Save reading to memory"
-            }
+            (
+                "save",
+                {
+                    "cmd": b"\xfb",
+                    "ret": False,
+                    "key": "REC/Setup",
+                    "desc": "Save reading to memory",
+                },
             ),
-        ('peak', { 
-            'cmd' : b"\xf7", 
-            'ret' : False,
-            'key' : 'PEAK/LEFT',
-            'desc': "Toggle peak value display"
-            }
+            (
+                "peak",
+                {
+                    "cmd": b"\xf7",
+                    "ret": False,
+                    "key": "PEAK/LEFT",
+                    "desc": "Toggle peak value display",
+                },
             ),
-        ('rel', { 
-            'cmd' : b"\xdf", 
-            'ret' : False,
-            'key' : 'REL/RIGHT',
-            'desc': "Toggle realtive reading"
-            }
+            (
+                "rel",
+                {
+                    "cmd": b"\xdf",
+                    "ret": False,
+                    "key": "REL/RIGHT",
+                    "desc": "Toggle realtive reading",
+                },
             ),
-        ('minmax', { 
-            'cmd' : b"\xbf", 
-            'ret' : False,
-            'key' : 'MAX/MIN/UP',
-            'desc': "Toggle Min/Max/current value display "
-            }
+            (
+                "minmax",
+                {
+                    "cmd": b"\xbf",
+                    "ret": False,
+                    "key": "MAX/MIN/UP",
+                    "desc": "Toggle Min/Max/current value display ",
+                },
             ),
-        ('hold', { 
-            'cmd' : b"\xef", 
-            'ret' : False,
-            'key' : 'HOLD/DOWN',
-            'desc': "Toggle hold"
-            }
+            (
+                "hold",
+                {
+                    "cmd": b"\xef",
+                    "ret": False,
+                    "key": "HOLD/DOWN",
+                    "desc": "Toggle hold",
+                },
             ),
-        ('off', { 
-            'cmd' : b"\xf3", 
-            'ret' : False,
-            'key' : 'POWER',
-            'desc': "Turn off the instrument"
-            }
+            (
+                "off",
+                {
+                    "cmd": b"\xf3",
+                    "ret": False,
+                    "key": "POWER",
+                    "desc": "Turn off the instrument",
+                },
             ),
-        ('logging', { 
-            'cmd' : b"\xdc", 
-            'ret' : False,
-            'key' : 'REC-hold',
-            'desc': "Start/stop data logging"
-            }
+            (
+                "logging",
+                {
+                    "cmd": b"\xdc",
+                    "ret": False,
+                    "key": "REC-hold",
+                    "desc": "Start/stop data logging",
+                },
             ),
-        ('prevview', { 
-            'cmd' : b"\xda", 
-            'ret' : False,
-            'key' : 'PEAK-hold',
-            'desc': "Switch to previous display view mode"
-            }
+            (
+                "prevview",
+                {
+                    "cmd": b"\xda",
+                    "ret": False,
+                    "key": "PEAK-hold",
+                    "desc": "Switch to previous display view mode",
+                },
             ),
-        ('nextview', { 
-            'cmd' : b"\xdb", 
-            'ret' : False,
-            'key' : 'REL-hold',
-            'desc': "Switch to next display view mode"
-            }
+            (
+                "nextview",
+                {
+                    "cmd": b"\xdb",
+                    "ret": False,
+                    "key": "REL-hold",
+                    "desc": "Switch to next display view mode",
+                },
             ),
-        ('viewsaved', { 
-            'cmd' : b"\xde", 
-            'ret' : False,
-            'key' : 'LIGHT/LOAD-hold',
-            'desc': "Toggle view mode for saved data"
-            }
+            (
+                "viewsaved",
+                {
+                    "cmd": b"\xde",
+                    "ret": False,
+                    "key": "LIGHT/LOAD-hold",
+                    "desc": "Toggle view mode for saved data",
+                },
             ),
-        ('get-live-data', { 
-            'cmd' : b"\x11", 
-            'ret' : True,
-            'key' : None,
-            'desc': "Read live data"
-            }
+            (
+                "get-live-data",
+                {"cmd": b"\x11", "ret": True, "key": None, "desc": "Read live data"},
             ),
-        ('get-saved-data', { 
-            'cmd' : b"\x12", 
-            'ret' : True,
-            'key' : None,
-            'desc': "Read manually saved data (registers 1-99)"
-            }
+            (
+                "get-saved-data",
+                {
+                    "cmd": b"\x12",
+                    "ret": True,
+                    "key": None,
+                    "desc": "Read manually saved data (registers 1-99)",
+                },
             ),
-        ('get-logger-data', { 
-            'cmd' : b"\x13", 
-            'ret' : True,
-            'key' : None,
-            'desc': "Read logger data"
-            }
-            )
-        ])
+            (
+                "get-logger-data",
+                {"cmd": b"\x13", "ret": True, "key": None, "desc": "Read logger data"},
+            ),
+        ]
+    )
 
-    return(cmd)
+    return cmd
 
 
 if __name__ == "__main__":
