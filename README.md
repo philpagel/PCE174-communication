@@ -36,16 +36,18 @@ Known issues:
   release.
 * I have no idea what read_no in the live data records is supposed to mean.
 * In logging mode, no sign is stored. That prevents the logging of negative
-  values which can occur in rel mode when light intensity drops below the
-  reference value. According to my tests this is not a problem because the
-  logging function does not honor rel mode but rather records absolute values.
-  this is kind of inconsistent as the rel flag IS recorded. Keep this in mind
-  when logging.
+  values which can occur in 'rel' mode when light intensity drops below the
+  reference value. According to my tests, this is not a problem because the
+  logging function does not honor 'rel' mode but rather records absolute
+  values.  This is kind of inconsistent as the rel flag *is* recorded. Keep
+  this in mind when logging.
 * Sometimes the instrument stores invalid data like seconds > 59. This causes
   data processing to fail. You can still use raw, hex or construct format but
-  repr and csv do not work in those cases...
-  This is a bug in the instruments firmware - there is nothing I can do about it.
-
+  repr and csv do not work in those cases...  This is a bug in the instruments
+  firmware - there is nothing I can do about it.
+* The instrument encodes many things in BCD. Some values of floating point
+  numbers cannot be represented exactly in binary representation. E.g. 110.3
+  turns into 110.30000000000001.
 
 ## Compatibility
 
@@ -193,11 +195,13 @@ key presses on the instrument. See *Button* entry for this information.
 
 ## Usage as a module
 
-You can import this script as a module and call its functions directly. This may be handy
-if you want to write your own software that needs access to the instrument.
+You can import this script as a module and call its functions directly. This
+may be handy if you want to write your own software that needs access to the
+instrument.
 
-In order for this to work, you need to rename the script to `pce174.py`. Without the extension
-import will not work. Alternatively, a properly named symlink will do.
+In order for this to work, you need to rename the script to `pce174.py`.
+Without the extension import will not work. Alternatively, a properly named
+symlink will do.
 
 Example session:
 
@@ -264,18 +268,22 @@ the instrument.
 Similar to raw but transcribed to hex representation.
 
 
-## Saving raw data and paring it later
+## Saving raw data and parsing it later
 
 If you write raw data blobs into a file you can later parse it:
 
     pce174 get-saved-data -f raw > foo.dat
     
-    pce174 get-saved-data -F foo
+    pce174 get-saved-data -F foo.dat
 
-    pce174 get-saved-data -F foo -f repr
+    pce174 get-saved-data -F foo.dat -f repr
 
-This may be useful, if you are not sure if you want the data in different formats, later or for debugging.
-Also it may help for bug reports in order to reproduce the problem based on actual raw data.
+This may be useful, if you are not sure if you want the data in different
+formats, later or for debugging.  Also it may help for bug reports in order to
+reproduce the problem based on actual raw data.
+
+**Caution:** this only works with raw data! If you forget to specify `-f raw`
+you will not be able to read it later.
 
 
 ## get-live-data
