@@ -94,6 +94,9 @@ If it is not provided by your distribution just install a local version:
 
     pip install construct
 
+It is also necessary to install pyserial, as follows:
+
+    pip install pyserial
 
 ## Usage
 
@@ -119,6 +122,9 @@ like this:
                             from the instrument
       -s SEP, --sep SEP     separator for csv (',')
 
+
+On Linux, you might need to configure your user account to have access to
+/dev/ttyUSB0. Alternatively you can run using sudo.
 
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
