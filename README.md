@@ -62,17 +62,7 @@ On my Debian Linux system, it is recognized out of the box; under Windows you
 may need to install the respective driver (from the web or the Windows
 software CD that comes with the instrument). Mac anyone?
 
-Serial communication parameters are `9600bps8N1`. Or more verbosely:
-
-parameter | value
-----------|---------
-baudrate  | 9600
-byte size | 8
-parity    | None
-stop bits | 1
-timeout   | None
-xon/xoff  | False
-rts/cts   | False
+Serial communication parameters are `9600bps8N1`.
 
 
 ## Dependencies

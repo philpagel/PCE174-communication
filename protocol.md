@@ -19,6 +19,22 @@ house or harms a kitten.
 
 ## Sending commands
 
+Upon connection to the computer the instrument identifies as a CP2102 USB to
+UART bridge (device ID `10c4:ea60`). 
+
+Serial communication parameters are `9600bps8N1`. Or more verbosely:
+
+parameter | value
+----------|---------
+baudrate  | 9600
+byte size | 8
+parity    | None
+stop bits | 1
+timeout   | None
+xon/xoff  | False
+rts/cts   | False
+
+
 All commands are preceded by sending the two magic bytes:
 
     0x87 0x83
