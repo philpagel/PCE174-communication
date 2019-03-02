@@ -26,16 +26,8 @@ def main():
     cmdset = get_commandset()
 
     if args.list:
-        print("Available commands:\n")
-        for key, value in cmdset.items():
-            print(" ", key)
-            print(" " * 5, value["desc"])
-            print(" " * 5, "Button:", value["key"])
-            if value["ret"]:
-                print(" " * 5, "Returns data in the specified format (-f)")
-            print()
+        list_commands(cmdset)
     elif args.command in cmdset:
-
         if len(args.file) > 0:
             if cmdset[args.command]["ret"]:
                 infile = open(args.file, "rb")
@@ -48,7 +40,6 @@ def main():
                 )
         else:
             blob = send_command(args.interface, args.command)
-
         if cmdset[args.command]["ret"]:  # read data
             if args.format == "raw":
                 sys.stdout.buffer.write(blob)
@@ -58,6 +49,21 @@ def main():
                 print(decode_blob(args.command, args.format, blob, args.sep))
     else:
         sys.exit("Unknown command")
+
+
+def list_commands(cmdset):
+    """Print list of available commands
+    as well as a short description
+    """
+
+    print("Available commands:\n")
+    for key, value in cmdset.items():
+        print(" ", key)
+        print(' '*5, value['desc'])
+        print(' '*5, "Button:", value['key'])
+        if value['ret']:
+            print(' '*5, "Returns data in the specified format (-f)")
+        print()
 
 
 def send_command(interface, command):
