@@ -6,13 +6,6 @@ A tool to communicate with a PCE-174 lightmeter/logger
 or compatible devices like the Extech HD450
 """
 
-# todo
-#   - add tethered logging functionality: i.e. keep reading live data in specified intervals
-#   - find out how to send simultaneous key presses (if possible)
-#   - maybe round output or assemble values in BCD to avoid funny numerical artifacts?
-#   - what is memload? is this a usefull name
-#   - what is read_no in live data?
-
 import sys, argparse, serial, binascii, warnings, datetime
 from collections import OrderedDict
 
