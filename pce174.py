@@ -7,11 +7,12 @@ A tool to communicate with a PCE-174 lightmeter/logger
 or compatible devices like the Extech HD450
 """
 
-import sys, argparse, serial, binascii, warnings, datetime, time
+# from stdlib
+import sys, argparse, binascii, warnings, datetime, time
 from collections import OrderedDict
-
-# requires construct ≥ 2.8 (tested with 2.9)
-from construct import *
+# others
+import serial
+from construct import * # requires construct ≥ 2.8 (tested with 2.9)
 
 __author__ = "Philipp Pagel"
 __copyright__ = "Copyright 2018, 2019, Philipp Pagel"

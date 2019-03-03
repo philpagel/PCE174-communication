@@ -43,21 +43,21 @@ After that, send a single code byte to run the desired command.  For the most
 part, the commands directly correspond to key presses on the instrument (see
 manual for details):
                             
-Code | Command   |  Key               | Description
------|-----------|--------------------|------------------------------------
-0xfe | units     |  UNITS key         | Toggle units (lux/fc)
-0x7f | range     |  RANGE/APO         | Toggle measurement ranges
-0xfd | light     |  LIGHT/LOAD key    | Toggle backlight
-0xf7 | peak      |  PEAK/LEFT         | Toggle peak min/max mode
-0xdf | rel       |  REL/RIGHT         | Toggle rel mode
-0xef | hold      |  HOLD/DOWN         | Toggle hold mode
-0xbf | minmax    |  MAX/MIN/UP        | Toggle min/max/continuous mode
-0xfb | save      |  REC/SETUP         | Save reading to memory
-0xde | lighthold |  LIGHT/LOAD (hold) | Toggle view mode for saved data
-0xdc | logger    |  REC/SETUP (hold)  | Start/Stop data logging
-0xf3 | off       |  POWER             | Power off
-0xdb | relhold   |  REL/RIGHT (hold)  | Switch to next display mode 
-0xda | peakhold  |  PEAK/LEFT (hold)  | Switch to previous display mode
+Code | binCode      |Command   |  Key               | Description
+-----|--------------|----------|--------------------|------------------------------------
+0xfe | 0b11111110   |units     |  UNITS key         | Toggle units (lux/fc)
+0xfd | 0b11111101   |light     |  LIGHT/LOAD key    | Toggle backlight
+0x7f | 0b01111111   |range     |  RANGE/APO         | Toggle measurement ranges
+0xfb | 0b11111011   |save      |  REC/SETUP         | Save reading to memory
+0xbf | 0b10111111   |minmax    |  MAX/MIN/UP        | Toggle min/max/continuous mode
+0xf7 | 0b11110111   |peak      |  PEAK/LEFT         | Toggle peak min/max mode
+0xdf | 0b11011111   |rel       |  REL/RIGHT         | Toggle rel mode
+0xef | 0b11101111   |hold      |  HOLD/DOWN         | Toggle hold mode
+0xde | 0b11011110   |lighthold |  LIGHT/LOAD (hold) | Toggle view mode for saved data
+0xdc | 0b11011100   |logger    |  REC/SETUP (hold)  | Start/Stop data logging
+0xda | 0b11011010   |peakhold  |  PEAK/LEFT (hold)  | Switch to previous display mode
+0xdb | 0b11011011   |relhold   |  REL/RIGHT (hold)  | Switch to next display mode 
+0xf3 | 0b11110011   |off       |  POWER             | Power off
 
 
 Commands that request data from the instrument cannot be triggered by button
