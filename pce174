@@ -171,7 +171,11 @@ def decode_blob(cmd, outformat, blob, sep):
     """
 
     ret = None
-    if cmd == "get-live-data":
+    if cmd == "get-status":
+        ret = parse_live_data(blob)
+        if outformat in ("csv", "repr"):
+            ret = process_stat_data(ret)
+    elif cmd == "get-live-data":
         ret = parse_live_data(blob)
         if outformat in ("csv", "repr"):
             ret = process_live_data(ret)
@@ -223,6 +227,23 @@ def parse_live_data(blob):
     )
 
     return Live_data.parse(blob)
+
+def process_stat_data(rec):
+    """Return status information"""
+
+    dat = process_live_data(rec)
+    ret = """Date:  {date}
+Time:  {time}
+Units: {unit}
+Range: {range}
+mode:  {mode}
+APO:   {APO}
+Power: {power}
+Disp:  {dispmode}
+Mem:   {memload}
+Read:  {read_no}""".format_map(dat)
+
+    return ret
 
 
 def process_live_data(rec):
@@ -780,6 +801,10 @@ def get_commandset():
                     "key": "LIGHT/LOAD-hold",
                     "desc": "Toggle view mode for saved data",
                 },
+            ),
+            (
+                "get-status",
+                {"cmd": b"\x11", "ret": True, "key": None, "desc": "Read status"},
             ),
             (
                 "get-live-data",
