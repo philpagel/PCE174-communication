@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-pce174 
+pce174
 
 A tool to communicate with a PCE-174 lightmeter/logger
 or compatible devices like the Extech HD450
 """
 
-import sys, argparse, serial, binascii, warnings, datetime
+import sys, argparse, serial, binascii, warnings, datetime, time
+import pdb
 from collections import OrderedDict
 
 # requires construct ≥ 2.8 (tested with 2.9)
 from construct import *
 
-__version__ = "0.3"
-__status__ = "Prototype"
 __author__ = "Philipp Pagel"
-__copyright__ = "Copyright 2018, Philipp Pagel"
+__copyright__ = "Copyright 2018, 2019, Philipp Pagel"
 __license__ = "MIT License"
 
 
@@ -28,6 +27,9 @@ def main():
     if args.list:
         list_commands(cmdset)
     elif args.command in cmdset:
+        if args.command=="log-live-data":
+            log_live_data(args)
+            return
         if len(args.file) > 0:
             if cmdset[args.command]["ret"]:
                 infile = open(args.file, "rb")
@@ -46,9 +48,10 @@ def main():
             elif args.format == "hex":
                 sys.stdout.buffer.write(binascii.hexlify(blob))
             elif args.format in ("csv", "repr", "construct"):
-                print(decode_blob(args.command, args.format, blob, args.sep))
+                print(decode_blob(blob, args.command, args.format, args.sep))
     else:
         sys.exit("Unknown command")
+
 
 
 def list_commands(cmdset):
@@ -65,6 +68,28 @@ def list_commands(cmdset):
             print(' '*5, "Returns data in the specified format (-f)")
         print()
 
+
+def log_live_data(args):
+    """Log live data
+    """
+
+    if args.sampleno <0:
+        args.sampleno = float('Inf')
+    i = 0
+    while True:
+        blob = send_command(args.interface, args.command)
+        if args.format == "raw":
+            sys.stdout.buffer.write(blob)
+        elif args.format == "hex":
+            sys.stdout.buffer.write(binascii.hexlify(blob))
+        elif args.format in ("csv", "repr", "construct"):
+            print(decode_blob(blob, args.command, args.format, args.sep, header=i==0))
+        i += 1
+        if args.sampleno >0:
+            if i >= args.sampleno:
+                break
+        time.sleep(args.samplingint)
+    return
 
 def send_command(interface, command):
     """Send command to instrument
@@ -87,7 +112,6 @@ def send_command(interface, command):
 
     blob = b""
     if cmdset[command]["ret"]:
-        # blob = iface.read(100000)
         while True:
             byte = iface.read(1)
             if len(byte) > 0:
@@ -127,7 +151,22 @@ def getargs():
         choices=["csv", "repr", "construct", "raw", "hex"],
         help="specify output format (csv)",
     )
-    # parser.add_argument('-T', '--sampling',  dest="sampling", type=int, default=0, help="set sampling interval for tethered logging [s]. See get-live-data command (0)")
+    parser.add_argument(
+            '-I',
+            '--samplingint',
+            dest="samplingint",
+            type=int,
+            default=1,
+            help="set sampling interval for tethered logging [s] (1)."
+            )
+    parser.add_argument(
+            '-n',
+            '--sampleno',
+            dest="sampleno",
+            type=int,
+            default=-1,
+            help="set number of samples for tethered logging [s] (-1)."
+            )
     parser.add_argument(
         "-F",
         "--file",
@@ -148,7 +187,7 @@ def getargs():
 
 def bcd2int(dat):
     """Return the decimal value of a BCD encoded int
-    
+
     The int can be of arbitrary length
     """
 
@@ -164,23 +203,22 @@ def bcd2int(dat):
     return ret
 
 
-def decode_blob(cmd, outformat, blob, sep):
+def decode_blob(blob, cmd, outformat, sep, header=True):
     """return decoded data
-    
+
     Central dispatch for the different parsing, processing and csv translation steps
     """
 
     ret = None
     if cmd == "get-status":
         ret = parse_live_data(blob)
-        if outformat in ("csv", "repr"):
-            ret = process_stat_data(ret)
-    elif cmd == "get-live-data":
+        ret = process_stat_data(ret)
+    elif cmd in ("get-live-data", 'log-live-data'):
         ret = parse_live_data(blob)
         if outformat in ("csv", "repr"):
             ret = process_live_data(ret)
         if outformat == ("csv"):
-            ret = live_data2csv(ret, sep)
+            ret = live_data2csv(ret, sep, header=header)
     elif cmd == "get-saved-data":
         ret = parse_saved_data(blob)
         if outformat in ("csv", "repr"):
@@ -196,12 +234,13 @@ def decode_blob(cmd, outformat, blob, sep):
     else:
         raise Exception("Unknown command.")
 
+
     return ret
 
 
 def parse_live_data(blob):
     """parse live data to construct container
-    
+
     Accept a binary blob of live data and parse it.
     Returns a construct container object with parsed data.
     """
@@ -251,10 +290,10 @@ def process_live_data(rec):
 
     Accepts a construct container object and returns a dict
     representing the measurement.
-    
+
     Processing comprises the assembly of common time and date formats as well
     as turning bit fields into human readable values.
-    
+
     Measurment records are dicts with the following keys:
 
     Key       | Description
@@ -262,10 +301,10 @@ def process_live_data(rec):
     date      | Date in ISO-8601 format (YYYY-MM-DD)
     time      | Time (HH:MM:SS)
     value     | Numerical value of reading
-    rawvalue  | raw numerical value 
+    rawvalue  | raw numerical value
     unit      | Unit of measurement (lux/fc)
     range     | Measurement range used (40, 400, ... 4000k)
-    mode      | normal/Pmin/Pmax/min/max/rel 
+    mode      | normal/Pmin/Pmax/min/max/rel
     hold      | Was hold active? (hold/cont)
     APO       | Auto-power-off (on/off)
     power     | Power status (ok/low)
@@ -303,7 +342,7 @@ def process_live_data(rec):
     return rec
 
 
-def live_data2csv(dat, sep):
+def live_data2csv(dat, sep, header=True):
     """returns csv from live data dict"""
 
     # define columns and assemble header
@@ -323,8 +362,10 @@ def live_data2csv(dat, sep):
         "mem_no",
         "read_no",
     )
-    csv = [sep.join(cols)]
 
+    csv = []
+    if header:
+        csv = [sep.join(cols)]
     csv.append(sep.join(([str(dat[col]) for col in cols])))
 
     return "\n".join(csv)
@@ -364,8 +405,8 @@ def process_saved_data(dat):
 
     Accepts a construct container object and returns a list of dicts
     Each dict represents one saved measurement.
-    
-    Processing comprises the assembly of common time and date formats as well as 
+
+    Processing comprises the assembly of common time and date formats as well as
     turning bit fields into human readable values.
 
     Saved data records are dicts with the folloing keys:
@@ -378,7 +419,7 @@ def process_saved_data(dat):
     value     | Numerical value
     unit      | Unit of measurement (lux/fc)
     range     | Measurement range used (40, 400, ... 400k)
-    mode      | normal/Pmin/Pmax/min/max/rel 
+    mode      | normal/Pmin/Pmax/min/max/rel
     hold      | Was hold active? (hold/cont)
     APO       | Auto-power-off (on/off)
     power     | Power status (ok/low)
@@ -429,7 +470,7 @@ def process_saved_data(dat):
     return dat2
 
 
-def saved_data2csv(dat, sep):
+def saved_data2csv(dat, sep, header=True):
     "returns csv from live data dict"
 
     cols = (
@@ -446,7 +487,9 @@ def saved_data2csv(dat, sep):
         "dispmode",
         "memload",
     )
-    csv = [sep.join(cols)]
+    csv = []
+    if header:
+        csv = [sep.join(cols)]
     for rec in dat:
         if rec["pos"] > 0:
             csv.append(sep.join(([str(rec[col]) for col in cols])))
@@ -456,7 +499,7 @@ def saved_data2csv(dat, sep):
 
 def parse_logger_data(blob):
     """Decode logger_data to csv
-    
+
     Accept a binary blob of logger data and parse it.
     Returns a cosntruct container object with parsed data.
     """
@@ -499,9 +542,9 @@ def process_logger_data(dat):
     """Return processed logger data
 
     Accepts a construct container object and returns a list of logging groups.
-    
+
     Each group is a list of data points. Datapoints are dicts with the following keys:
-   
+
     Key       | Description
     ----------|-------------------------------------------------
     groupno   | numerical id of the logging group
@@ -512,7 +555,7 @@ def process_logger_data(dat):
     value     | measurement
     unit      | Unit of measurement (lux/fc)
     range     | Measurement range used (40, 400, ... 400k)
-    mode      | normal/Pmin/Pmax/min/max/rel 
+    mode      | normal/Pmin/Pmax/min/max/rel
     hold      | Was hold active? (hold/cont)
     APO       | Auto-power-off (on/off)
 
@@ -559,7 +602,7 @@ def process_logger_data(dat):
     return logger
 
 
-def logger_data2csv(dat, sep):
+def logger_data2csv(dat, sep, header=True):
     "returns csv from logger data list"
 
     cols = (
@@ -574,7 +617,9 @@ def logger_data2csv(dat, sep):
         "hold",
         "APO",
     )
-    csv = [sep.join(cols)]
+    csv = []
+    if header:
+        csv = [sep.join(cols)]
     for rec in dat:
         csv.append(sep.join(([str(rec[col]) for col in cols])))
 
@@ -583,10 +628,10 @@ def logger_data2csv(dat, sep):
 
 def decode_stat0(byte):
     """return a dict from stat0 byte data
-    
+
     The return value is a dict with decoded information form the bit field and
     contains the following keys
-    
+
     Key    | Description
     -------|---------------------------------
     unit   | unit of measurement [lux/fc]
@@ -637,7 +682,7 @@ def decode_stat0(byte):
 
 def decode_stat1(byte):
     """return a dict from Stat1 byte data
-    
+
     The return value is a dict with decoded information form the bit field and
     contains the folliwing keys
 
@@ -674,7 +719,7 @@ def decode_stat1(byte):
 def get_commandset():
     """return command definition dict
 
-    Actually, an ordered dict of dicts. 
+    Actually, an ordered dict of dicts.
     Each inner dict represents a valid command and has the following keys:
 
     cmd     command byte (sent to instrument)
@@ -804,11 +849,30 @@ def get_commandset():
             ),
             (
                 "get-status",
-                {"cmd": b"\x11", "ret": True, "key": None, "desc": "Read status"},
+                {
+                    "cmd": b"\x11",
+                    "ret": True,
+                    "key": None,
+                    "desc": "Read status"
+                    },
             ),
             (
                 "get-live-data",
-                {"cmd": b"\x11", "ret": True, "key": None, "desc": "Read live data"},
+                {
+                    "cmd": b"\x11",
+                    "ret": True,
+                    "key": None,
+                    "desc": "Read live data"
+                    },
+            ),
+            (
+                "log-live-data",
+                {
+                    "cmd": b"\x11",
+                    "ret": True,
+                    "key": None,
+                    "desc": "Log live data. See -I and -n"
+                    },
             ),
             (
                 "get-saved-data",

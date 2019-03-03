@@ -36,18 +36,20 @@ Known issues:
   release.
 * I have no idea what read_no in the live data records is supposed to mean.
 * In logging mode, no sign is stored. That prevents the logging of negative
-  values which can occur in 'rel' mode when light intensity drops below the
+  values which can occur in `rel` mode when light intensity drops below the
   reference value. According to my tests, this is not a problem because the
-  logging function does not honor 'rel' mode but rather records absolute
-  values.  This is kind of inconsistent as the rel flag *is* recorded. Keep
+  logging function does not honor `rel` mode but rather records absolute
+  values.  This is kind of inconsistent as the `rel` flag *is* recorded. Keep
   this in mind when logging.
 * Sometimes the instrument stores invalid data like seconds > 59. This causes
   data processing to fail. You can still use raw, hex or construct format but
   repr and csv do not work in those cases...  This is a bug in the instruments
-  firmware - there is nothing I can do about it.
+  firmware – there is nothing I can do about it.
 * The instrument encodes many things in BCD. Some values of floating point
   numbers cannot be represented exactly in binary representation. E.g. 110.3
   turns into 110.30000000000001.
+* Timing in `log-live-data` is not accurate – in fact, all I did here was to
+  `sleep` for the number of seconds specified in `-I` between samples.  
 
 ## Compatibility
 
@@ -96,7 +98,7 @@ To communicate with the light meter connect through USB and run the command
 like this:
 
     usage: pce174 [-h] [-l] [-i INTERFACE] [-f {csv,repr,construct,raw,hex}]
-                  [-T SAMPLING] [-F FILE] [-s SEP]
+                  [-I SAMPLINGINT] [-n SAMPLENO] [-F FILE] [-s SEP]
                   [command]
 
     Talk to a PCE-174 lightmeter/logger
@@ -110,6 +112,10 @@ like this:
       -i INTERFACE          interface to connect to (/dev/ttyUSB0)
       -f {csv,repr,construct,raw,hex}
                             specify output format (csv)
+      -I SAMPLINGINT, --samplingint SAMPLINGINT
+                            set sampling interval for tethered logging [s] (1).
+      -n SAMPLENO, --sampleno SAMPLENO
+                            set number of samples for tethered logging [s] (-1).
       -F FILE, --file FILE  parse previously saved raw data instead of reading
                             from the instrument
       -s SEP, --sep SEP     separator for csv (',')
@@ -176,8 +182,18 @@ key presses on the instrument. See *Button* entry for this information.
           Toggle view mode for saved data
           Button: LIGHT/LOAD-hold
 
+      get-status
+          Read status
+          Button: None
+          Returns data in the specified format (-f)
+
       get-live-data
           Read live data
+          Button: None
+          Returns data in the specified format (-f)
+
+      log-live-data
+          Log live data. See -I and -n
           Button: None
           Returns data in the specified format (-f)
 
@@ -190,7 +206,6 @@ key presses on the instrument. See *Button* entry for this information.
           Read logger data
           Button: None
           Returns data in the specified format (-f)
-
 
 
 ## Usage as a module
@@ -286,6 +301,21 @@ reproduce the problem based on actual raw data.
 you will not be able to read it later.
 
 
+## get-status
+
+Returns the current status of the instrument. E.g.:
+
+    Date:  2007-08-16
+    Time:  19:47:34
+    Units: lux
+    Range: 400
+    mode:  normal
+    APO:   on
+    Power: ok
+    Disp:  time
+    Mem:   None
+    Read:  1
+
 ## get-live-data
 
 This command reads live data from the instrument. I.e. the current readings.
@@ -325,6 +355,15 @@ weekday is a number (1-7) and manually set – i.e. the instrument does not try
 to ensure that the weekday entry matches the date. In order to avoid confusion,
 I decided to ignore the weekday. If you need the weekday, better compute it
 from the date.
+
+
+## log-live-data
+
+This command calls `get-live-data` repeatedly to do teathered live logging. By
+default it will log every second until interrupted. You can set the logging
+interval with the `-I` option and limit the number of readings with `-n`.
+
+As for `get-live-data`, the first row contains the column headers.
 
 
 ## get-saved-data
