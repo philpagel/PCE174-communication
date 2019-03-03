@@ -3,10 +3,9 @@
 This script implements the serial communication protocol used by the PCE-174
 logging light meter.
 
-The PCE-174 appears to be identical to the Extech HD450 light meter but as I
-don't own the latter I have no way of testing this.  The user manual for the
-Extech version of the instrument is quite a bit better than the PCE version, so
-try and find it online...
+The PCE-174 appears to be identical to/compatible with the Extech HD450 light
+meter.  The user manual for the Extech version of the instrument is quite a bit
+better than the PCE version, so try and find it online...
 
 See `protocol.md` for a detailed description of the communication protocol.
 
@@ -17,9 +16,11 @@ The script can send commands to control the instrument and request data from it:
 
 * Live data: the current reading
 * Saved data: the 99 registers for manually saved values
-* Loggin data: entire logging sessions stored in instrument memory
+* Logging data: entire logging sessions stored in instrument memory
+* Also, tethered logging is supported. I.e. the program keeps requesting
+  live-data from the instrument (`log-live-data`).
 
-I.e. all functionality that can be derived from the manufacturer protocol
+All functionality that can be derived from the manufacturer protocol
 documentation has been implemented. It is possible, however, that there are
 undocumented functions.
 
@@ -31,16 +32,16 @@ Feedback/bug reports are welcome.
 
 Known issues:
 
+* Timing in `log-live-data` is not accurate – in fact, all I did here was to
+  `sleep` for the number of seconds specified in `-I` between samples.  
 * I am not sure what `memload` from the `Stat0` byte does. Once I find
   out I may change the name to reflect its meaning. I'll leave that to a later
   release.
-* I have no idea what read_no in the live data records is supposed to mean.
-* In logging mode, no sign is stored. That prevents the logging of negative
-  values which can occur in `rel` mode when light intensity drops below the
-  reference value. According to my tests, this is not a problem because the
-  logging function does not honor `rel` mode but rather records absolute
-  values.  This is kind of inconsistent as the `rel` flag *is* recorded. Keep
-  this in mind when logging.
+* I have no idea what `read_no` in the live data records is supposed to mean.
+* In standalone logging mode, the instrument does not honor `rel` mode but
+  rather records absolute values. This is kind of inconsistent as the `rel`
+  flag *is* recorded. However, tethered logging carried out by this program
+  does treat `rel` mode as expected – so don't confuse the two.
 * Sometimes the instrument stores invalid data like seconds > 59. This causes
   data processing to fail. You can still use raw, hex or construct format but
   repr and csv do not work in those cases...  This is a bug in the instruments
@@ -48,8 +49,12 @@ Known issues:
 * The instrument encodes many things in BCD. Some values of floating point
   numbers cannot be represented exactly in binary representation. E.g. 110.3
   turns into 110.30000000000001.
-* Timing in `log-live-data` is not accurate – in fact, all I did here was to
-  `sleep` for the number of seconds specified in `-I` between samples.  
+
+
+## Credits
+
+Github user *FRISAK* tested this with an Extech HD450 and also contributed some
+changes to code and documentation.
 
 ## Compatibility
 
@@ -97,7 +102,7 @@ It is also necessary to install pyserial, as follows:
 To communicate with the light meter connect through USB and run the command
 like this:
 
-    usage: pce174 [-h] [-l] [-i INTERFACE] [-f {csv,repr,construct,raw,hex}]
+    usage: pce174.py [-h] [-l] [-i INTERFACE] [-f {csv,repr,construct,raw,hex}]
                   [-I SAMPLINGINT] [-n SAMPLENO] [-F FILE] [-s SEP]
                   [command]
 
@@ -214,10 +219,6 @@ You can import this script as a module and call its functions directly. This
 may be handy if you want to write your own software that needs access to the
 instrument.
 
-In order for this to work, you need to rename the script to `pce174.py`.
-Without the extension import will not work. Alternatively, a properly named
-symlink will do.
-
 Example session:
 
     >>> import pce174
@@ -287,11 +288,11 @@ Similar to raw but transcribed to hex representation.
 
 If you write raw data blobs into a file you can later parse it:
 
-    pce174 get-saved-data -f raw > foo.dat
+    pce174.py get-saved-data -f raw > foo.dat
     
-    pce174 get-saved-data -F foo.dat
+    pce174.py get-saved-data -F foo.dat
 
-    pce174 get-saved-data -F foo.dat -f repr
+    pce174.py get-saved-data -F foo.dat -f repr
 
 This may be useful, if you are not sure if you want the data in different
 formats, later or for debugging.  Also it may help for bug reports in order to
