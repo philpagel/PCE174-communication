@@ -3,9 +3,9 @@
 This script implements the serial communication protocol used by the PCE-174
 logging light meter.
 
-The PCE-174 appears to be identical to/compatible with the Extech HD450 light
-meter.  The user manual for the Extech version of the instrument is quite a bit
-better than the PCE version, so try and find it online...
+The PCE-174 appears to be identical to/compatible with the Extech HD450 and
+HD400 light meters. The user manual for the Extech version of the instrument
+is quite a bit better than the PCE version, so try and find it online...
 
 See `protocol.md` for a detailed description of the communication protocol.
 
@@ -46,9 +46,9 @@ Known issues:
   data processing to fail. You can still use raw, hex or construct format but
   repr and csv do not work in those cases...  This is a bug in the instruments
   firmware – there is nothing I can do about it.
-* The instrument encodes many things in BCD. Some values of floating point
-  numbers cannot be represented exactly in binary representation. E.g. 110.3
-  turns into 110.30000000000001.
+* The instrument encodes many things in BCD. Some BCD values cannot be
+  represented exactly in binary representation. E.g. 110.3 turns into
+  110.30000000000001.
 
 
 ## Credits
@@ -246,62 +246,6 @@ Example session:
 See pydoc and/or source code for function documentation.
 
 
-## Data formats
-
-Through the -f option you can choose from several output format options:
-
-### csv
-
-This is the most useful format for most purposes, as it can easily be imported
-into other software.  The first row is the header declaring the column names.
-The field separator is a comma (`','`), by default and can be chosen with the
-`-s` option. Lines are separated by a single newline character (`\n`).
-
-
-### repr
-
-This format is the Python representation of the data. It is mostly useful for
-debugging and possibly for use in other python programs although in the latter
-case it's probably better to import the script as a module and use the data
-directly as it is returned from the parse-XXX-data or process-XXX-data
-functions.
-
-
-### construct
-
-This is the container representation of the construct library. For
-debugging, only.
-
-
-### raw
-
-This format simply writes the binary blob to `STDOUT` as it is received from
-the instrument.
-
-
-### hex
-
-Similar to raw but transcribed to hex representation.
-
-
-## Saving raw data and parsing it later
-
-If you write raw data blobs into a file you can later parse it:
-
-    pce174.py get-saved-data -f raw > foo.dat
-    
-    pce174.py get-saved-data -F foo.dat
-
-    pce174.py get-saved-data -F foo.dat -f repr
-
-This may be useful, if you are not sure if you want the data in different
-formats, later or for debugging.  Also it may help for bug reports in order to
-reproduce the problem based on actual raw data.
-
-**Caution:** this only works with raw data! If you forget to specify `-f raw`
-you will not be able to read it later.
-
-
 ## get-status
 
 Returns the current status of the instrument. E.g.:
@@ -316,6 +260,10 @@ Returns the current status of the instrument. E.g.:
     Disp:  time
     Mem:   None
     Read:  1
+
+All of the above is also included in the data returned by `get-live-data` but
+all you want is checking status, this command is more conveniant.
+
 
 ## get-live-data
 
@@ -360,11 +308,15 @@ from the date.
 
 ## log-live-data
 
-This command calls `get-live-data` repeatedly to do teathered live logging. By
+This command calls `get-live-data` repeatedly to do tethered live logging. By
 default it will log every second until interrupted. You can set the logging
 interval with the `-I` option and limit the number of readings with `-n`.
+Negative values of `-n` / `--sampleno` mean that the program will keep loggin
+until interrupted.
 
-As for `get-live-data`, the first row contains the column headers.
+As for `get-live-data`, the first row contains the column headers in csv
+format. All other formats are simply written to `STDOUT` without any record
+separators.
 
 
 ## get-saved-data
@@ -438,6 +390,63 @@ hold      | Was hold active? (hold/cont)
 APO       | Auto-power-off (on/off)
 
 See get-live-data for details on other formats and weekday handling.
+
+
+## Data formats
+
+Through the -f option you can choose from several output formats for the
+`get-XXX-data` functions:
+
+### csv
+
+This is the most useful format for most purposes, as it can easily be imported
+into other software.  The first row is the header declaring the column names.
+The field separator is a comma (`','`), by default and can be chosen with the
+`-s` option. Lines are separated by a single newline character (`\n`).
+
+
+### repr
+
+This format is the Python representation of the data. It is mostly useful for
+debugging and possibly for use in other python programs although in the latter
+case it's probably better to import the script as a module and use the data
+directly as it is returned from the `parse-XXX-data` or `process-XXX-data`
+functions of the module.
+
+
+### construct
+
+This is the container representation of the construct library. For
+debugging, only.
+
+
+### raw
+
+This format simply writes the binary blob to `STDOUT` as it is received from
+the instrument.
+
+
+### hex
+
+Similar to raw but transcribed to hex representation.
+
+
+## Saving raw data and parsing it later
+
+If you write raw data blobs into a file you can later parse it:
+
+    pce174.py get-saved-data -f raw > foo.dat
+    
+    pce174.py get-saved-data -F foo.dat
+
+    pce174.py get-saved-data -F foo.dat -f repr
+
+This may be useful, if you are not sure if you want the data in different
+formats, later or for debugging.  Also it may help for bug reports in order to
+reproduce the problem based on actual raw data.
+
+**Caution:** this only works with raw data! If you forget to specify `-f raw`
+you will not be able to read it later.
 
 
 # Some useful things from the manual

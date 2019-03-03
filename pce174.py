@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 pce174
 
@@ -7,7 +8,6 @@ or compatible devices like the Extech HD450
 """
 
 import sys, argparse, serial, binascii, warnings, datetime, time
-import pdb
 from collections import OrderedDict
 
 # requires construct ≥ 2.8 (tested with 2.9)
@@ -64,13 +64,11 @@ def list_commands(cmdset):
         print(" ", key)
         print(' '*5, value['desc'])
         print(' '*5, "Button:", value['key'])
-        if value['ret']:
-            print(' '*5, "Returns data in the specified format (-f)")
         print()
 
 
 def log_live_data(args):
-    """Log live data
+    """Log live data (tethered logging)
     """
 
     if args.sampleno <0:
@@ -91,13 +89,14 @@ def log_live_data(args):
         time.sleep(args.samplingint)
     return
 
+
 def send_command(interface, command):
     """Send command to instrument
 
     iface    : string indicating the serial interface to use. E.g. /dev/ttyUSB0
     command  : must be one of the valid command strings defined in commandset
 
-    returns the binary blob that is receiven in response or empty byte array
+    returns the binary blob that is received in response or empty byte array
     """
 
     iface = serial.Serial(
@@ -112,6 +111,41 @@ def send_command(interface, command):
 
     blob = b""
     if cmdset[command]["ret"]:
+        while True:
+            byte = iface.read(1)
+            if len(byte) > 0:
+                blob += byte
+            else:
+                break
+
+    iface.close()
+
+    return blob
+
+
+def send_cmd(interface, cmd, read=False, timeout=0.1):
+    """Send command byte to instrument
+
+    iface    : string indicating the serial interface to use. E.g. /dev/ttyUSB0
+    cmd      : a single byte to be sent
+    read     : If True try to read data from the instrument after sending command
+    timeout  : Rimeout for serial communication
+
+    returns the binary blob that is received in response or empty byte array
+    This function is not used by the program, directly. It is provided for advanced use,
+    e.g. when trying to reverse engineer/use undocumented functions of the instrument.
+    """
+
+    iface = serial.Serial(
+        port=interface, baudrate=9600, bytesize=8, parity="N", stopbits=1, timeout=timeout
+    )
+
+    hello = b"\x87\x83"  # command prefix
+    msg = hello + byte
+    iface.write(msg)
+
+    blob = b""
+    if read:
         while True:
             byte = iface.read(1)
             if len(byte) > 0:
@@ -267,8 +301,9 @@ def parse_live_data(blob):
 
     return Live_data.parse(blob)
 
+
 def process_stat_data(rec):
-    """Return status information"""
+    """Return status information in human readable form"""
 
     dat = process_live_data(rec)
     ret = """Date:  {date}
