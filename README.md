@@ -49,6 +49,7 @@ Known issues:
 * The instrument encodes many things in BCD. Some BCD values cannot be
   represented exactly in binary representation. E.g. 110.3 turns into
   110.30000000000001.
+* Mysteriously, the `up` and `down` commands do not seem to work in setup mode.
 
 
 ## Credits
@@ -131,7 +132,9 @@ On Linux, you might need to configure your user account to have access to
 
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
-key presses on the instrument. See *Button* entry for this information.
+key presses on the instrument. See *Button* entry for this information. For
+conveniance, some commands are redundant in that they refer to the same biutton
+press but mean differnt things depending on context.
 
     Available commands:
 
@@ -152,19 +155,19 @@ key presses on the instrument. See *Button* entry for this information.
           Button: REC/Setup
 
       peak
-          Toggle peak value display
+          Toggle peak value display or next value
           Button: PEAK/LEFT
 
       rel
-          Toggle realtive reading
+          Toggle realtive reading or previous value
           Button: REL/RIGHT
 
       minmax
-          Toggle Min/Max/current value display 
+          Toggle Min/Max/current value display or increase value
           Button: MAX/MIN/UP
 
       hold
-          Toggle hold
+          Toggle hold or decrease value
           Button: HOLD/DOWN
 
       off
@@ -187,30 +190,53 @@ key presses on the instrument. See *Button* entry for this information.
           Toggle view mode for saved data
           Button: LIGHT/LOAD-hold
 
+      setup
+          Enter/exit setup
+          Button: REC+UNITS
+
+      APOon
+          Turn on Auto Power-Off (APO)
+          Button: REC+RANGE
+
+      APOoff
+          Turn off Auto Power-Off (APO)
+          Button: REC+RANGE
+
       get-status
           Read status
           Button: None
-          Returns data in the specified format (-f)
 
       get-live-data
           Read live data
           Button: None
-          Returns data in the specified format (-f)
 
       log-live-data
           Log live data. See -I and -n
           Button: None
-          Returns data in the specified format (-f)
 
       get-saved-data
           Read manually saved data (registers 1-99)
           Button: None
-          Returns data in the specified format (-f)
 
       get-logger-data
           Read logger data
           Button: None
-          Returns data in the specified format (-f)
+
+      up
+          Toggle Min/Max/current value display or increase value
+          Button: MAX/MIN/UP
+
+      down
+          Toggle hold or decrease value
+          Button: HOLD/DOWN
+
+      left
+          Toggle peak value display or next value
+          Button: PEAK/LEFT
+
+      right
+          Toggle realtive reading or previous value
+          Button: REL/RIGHT
 
 
 ## Usage as a module

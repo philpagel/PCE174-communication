@@ -25,15 +25,15 @@ def main():
 
     args = getargs()
 
-    if args.list:
-        list_commands(commandset)
-        return
-
     # Add redundant keys to commandset for conveniance
     commandset["up"] = commandset["minmax"]
     commandset["down"] = commandset["hold"]
     commandset["left"] = commandset["peak"]
     commandset["right"] = commandset["rel"]
+
+    if args.list:
+        list_commands(commandset)
+        return
 
     if args.command in commandset:
         if args.command=="log-live-data":
@@ -59,7 +59,7 @@ def main():
             elif args.format in ("csv", "repr", "construct"):
                 print(decode_blob(blob, args.command, args.format, args.sep))
     else:
-        sys.exit("Unknown command")
+        sys.exit("Unknown command\nTry -h and/or -l for help")
 
 
 
@@ -732,7 +732,7 @@ commandset = OrderedDict(
                     "cmd": b"\xf7",
                     "ret": False,
                     "key": "PEAK/LEFT",
-                    "desc": "Toggle peak value display",
+                    "desc": "Toggle peak value display or next value",
                 },
             ),
             (
@@ -741,7 +741,7 @@ commandset = OrderedDict(
                     "cmd": b"\xdf",
                     "ret": False,
                     "key": "REL/RIGHT",
-                    "desc": "Toggle realtive reading",
+                    "desc": "Toggle realtive reading or previous value",
                 },
             ),
             (
@@ -750,7 +750,7 @@ commandset = OrderedDict(
                     "cmd": b"\xbf",
                     "ret": False,
                     "key": "MAX/MIN/UP",
-                    "desc": "Toggle Min/Max/current value display ",
+                    "desc": "Toggle Min/Max/current value display or increase value",
                 },
             ),
             (
@@ -759,7 +759,7 @@ commandset = OrderedDict(
                     "cmd": b"\xef",
                     "ret": False,
                     "key": "HOLD/DOWN",
-                    "desc": "Toggle hold",
+                    "desc": "Toggle hold or decrease value",
                 },
             ),
             (
@@ -814,6 +814,33 @@ commandset = OrderedDict(
                     "ret": False,   
                     "key": "REC+UNITS",
                     "desc": "Enter/exit setup",
+                },
+            ),
+#            (
+#                "clearval",
+#                {
+#                    "cmd": b"\xee",
+#                    "ret": False,   
+#                    "key": "REC+LOAD",
+#                    "desc": "Clear the manual value storage (does not work!)",
+#                },
+#            ),
+            (
+                "APOon",
+                {
+                    "cmd": b"\x7b",
+                    "ret": False,   
+                    "key": "REC+RANGE",
+                    "desc": "Turn on Auto Power-Off (APO)",
+                },
+            ),
+            (
+                "APOoff",
+                {
+                    "cmd": b"\x7c",
+                    "ret": False,   
+                    "key": "REC+RANGE",
+                    "desc": "Turn off Auto Power-Off (APO)",
                 },
             ),
             (
@@ -924,7 +951,6 @@ def getargs():
     )
 
     return parser.parse_args()
-
 
 
 if __name__ == "__main__":
