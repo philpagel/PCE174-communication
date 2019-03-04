@@ -13,6 +13,7 @@ from collections import OrderedDict
 # others
 import serial
 from construct import * # requires construct ≥ 2.8 (tested with 2.9)
+import pdb
 
 __author__ = "Philipp Pagel"
 __copyright__ = "Copyright 2018, 2019, Philipp Pagel"
@@ -23,16 +24,23 @@ def main():
     "The main function"
 
     args = getargs()
-    cmdset = get_commandset()
 
     if args.list:
-        list_commands(cmdset)
-    elif args.command in cmdset:
+        list_commands(commandset)
+        return
+
+    # Add redundant keys to commandset for conveniance
+    commandset["up"] = commandset["minmax"]
+    commandset["down"] = commandset["hold"]
+    commandset["left"] = commandset["peak"]
+    commandset["right"] = commandset["rel"]
+
+    if args.command in commandset:
         if args.command=="log-live-data":
             log_live_data(args)
             return
         if len(args.file) > 0:
-            if cmdset[args.command]["ret"]:
+            if commandset[args.command]["ret"]:
                 infile = open(args.file, "rb")
                 blob = infile.read()
                 infile.close()
@@ -43,7 +51,7 @@ def main():
                 )
         else:
             blob = send_command(args.interface, args.command)
-        if cmdset[args.command]["ret"]:  # read data
+        if commandset[args.command]["ret"]:  # read data
             if args.format == "raw":
                 sys.stdout.buffer.write(blob)
             elif args.format == "hex":
@@ -55,13 +63,13 @@ def main():
 
 
 
-def list_commands(cmdset):
+def list_commands(commandset):
     """Print list of available commands
     as well as a short description
     """
 
     print("Available commands:\n")
-    for key, value in cmdset.items():
+    for key, value in commandset.items():
         print(" ", key)
         print(' '*5, value['desc'])
         print(' '*5, "Button:", value['key'])
@@ -91,58 +99,37 @@ def log_live_data(args):
     return
 
 
-def send_command(interface, command):
-    """Send command to instrument
+def send_command(port, command):
+    """Send a known command to instrument
 
-    iface    : string indicating the serial interface to use. E.g. /dev/ttyUSB0
+    port     : string indicating the serial interface to use. E.g. /dev/ttyUSB0
     command  : must be one of the valid command strings defined in commandset
 
     returns the binary blob that is received in response or empty byte array
     """
 
-    iface = serial.Serial(
-        port=interface, baudrate=9600, bytesize=8, parity="N", stopbits=1, timeout=0.1
-    )
-
-    cmdset = get_commandset()
-
-    hello = b"\x87\x83"  # command prefix
-    msg = hello + cmdset[command]["cmd"]
-    iface.write(msg)
-
-    blob = b""
-    if cmdset[command]["ret"]:
-        while True:
-            byte = iface.read(1)
-            if len(byte) > 0:
-                blob += byte
-            else:
-                break
-
-    iface.close()
-
-    return blob
+    return send_cmd(port, commandset[command]["cmd"], read=commandset[command]["ret"])
 
 
-def send_cmd(interface, cmd, read=False, timeout=0.1):
+def send_cmd(port, cmd, read=False, timeout=0.1):
     """Send command byte to instrument
 
-    iface    : string indicating the serial interface to use. E.g. /dev/ttyUSB0
+    port     : string indicating the serial port to use. E.g. /dev/ttyUSB0
     cmd      : a single byte to be sent
     read     : If True try to read data from the instrument after sending command
     timeout  : Rimeout for serial communication
 
     returns the binary blob that is received in response or empty byte array
-    This function is not used by the program, directly. It is provided for advanced use,
-    e.g. when trying to reverse engineer/use undocumented functions of the instrument.
+    This function is provided separately for advanced use, e.g. when trying to
+    reverse engineer/use undocumented functions of the instrument.
     """
 
     iface = serial.Serial(
-        port=interface, baudrate=9600, bytesize=8, parity="N", stopbits=1, timeout=timeout
+        port=port, baudrate=9600, bytesize=8, parity="N", stopbits=1, timeout=timeout
     )
 
     hello = b"\x87\x83"  # command prefix
-    msg = hello + byte
+    msg = hello + cmd
     iface.write(msg)
 
     blob = b""
@@ -153,71 +140,9 @@ def send_cmd(interface, cmd, read=False, timeout=0.1):
                 blob += byte
             else:
                 break
-
     iface.close()
 
     return blob
-
-
-def getargs():
-    "Return commandline options and arguments"
-
-    parser = argparse.ArgumentParser(description="Talk to a PCE-174 lightmeter/logger")
-
-    parser.add_argument(
-        "-l",
-        "--list",
-        dest="list",
-        action="store_true",
-        help="list all available commands",
-    )
-    parser.add_argument(
-        "-i",
-        dest="interface",
-        type=str,
-        default="/dev/ttyUSB0",
-        help="interface to connect to (/dev/ttyUSB0)",
-    )
-    parser.add_argument(
-        "-f",
-        dest="format",
-        type=str,
-        default="csv",
-        choices=["csv", "repr", "construct", "raw", "hex"],
-        help="specify output format (csv)",
-    )
-    parser.add_argument(
-            '-I',
-            '--samplingint',
-            dest="samplingint",
-            type=int,
-            default=1,
-            help="set sampling interval for tethered logging [s] (1)."
-            )
-    parser.add_argument(
-            '-n',
-            '--sampleno',
-            dest="sampleno",
-            type=int,
-            default=-1,
-            help="set number of samples for tethered logging [s] (-1)."
-            )
-    parser.add_argument(
-        "-F",
-        "--file",
-        dest="file",
-        type=str,
-        default="",
-        help="parse previously saved raw data instead of reading from the instrument",
-    )
-    parser.add_argument(
-        "-s", "--sep", dest="sep", type=str, default=",", help="separator for csv (',')"
-    )
-    parser.add_argument(
-        "command", nargs="?", type=str, help="command to send to instrument"
-    )
-
-    return parser.parse_args()
 
 
 def bcd2int(dat):
@@ -752,19 +677,18 @@ def decode_stat1(byte):
     return ret
 
 
-def get_commandset():
-    """return command definition dict
 
-    Actually, an ordered dict of dicts.
-    Each inner dict represents a valid command and has the following keys:
+"""return command definition dict
 
-    cmd     command byte (sent to instrument)
-    ret     boolean indicating if any data will be returned by the instrument in response
-    key     equivalent key press on the instrument. None if no such key press exists
-    desc    brief command description
-    """
+Actually, an ordered dict of dicts.
+Each inner dict represents a valid command and has the following keys:
 
-    cmd = OrderedDict(
+cmd     command byte (sent to instrument)
+ret     boolean indicating if any data will be returned by the instrument in response
+key     equivalent key press on the instrument. None if no such key press exists
+desc    brief command description
+"""
+commandset = OrderedDict(
         [
             (
                 "units",
@@ -884,6 +808,15 @@ def get_commandset():
                 },
             ),
             (
+                "setup",
+                {
+                    "cmd": b"\xfa",
+                    "ret": False,   
+                    "key": "REC+UNITS",
+                    "desc": "Enter/exit setup",
+                },
+            ),
+            (
                 "get-status",
                 {
                     "cmd": b"\x11",
@@ -921,12 +854,77 @@ def get_commandset():
             ),
             (
                 "get-logger-data",
-                {"cmd": b"\x13", "ret": True, "key": None, "desc": "Read logger data"},
+                {
+                    "cmd": b"\x13", 
+                    "ret": True, 
+                    "key": None, 
+                    "desc": "Read logger data"
+                    },
             ),
         ]
     )
 
-    return cmd
+
+def getargs():
+    "Return commandline options and arguments"
+
+    parser = argparse.ArgumentParser(description="Talk to a PCE-174 lightmeter/logger")
+
+    parser.add_argument(
+        "-l",
+        "--list",
+        dest="list",
+        action="store_true",
+        help="list all available commands",
+    )
+    parser.add_argument(
+        "-i",
+        dest="interface",
+        type=str,
+        default="/dev/ttyUSB0",
+        help="interface to connect to (/dev/ttyUSB0)",
+    )
+    parser.add_argument(
+        "-f",
+        dest="format",
+        type=str,
+        default="csv",
+        choices=["csv", "repr", "construct", "raw", "hex"],
+        help="specify output format (csv)",
+    )
+    parser.add_argument(
+            '-I',
+            '--samplingint',
+            dest="samplingint",
+            type=int,
+            default=1,
+            help="set sampling interval for tethered logging [s] (1)."
+            )
+    parser.add_argument(
+            '-n',
+            '--sampleno',
+            dest="sampleno",
+            type=int,
+            default=-1,
+            help="set number of samples for tethered logging [s] (-1)."
+            )
+    parser.add_argument(
+        "-F",
+        "--file",
+        dest="file",
+        type=str,
+        default="",
+        help="parse previously saved raw data instead of reading from the instrument",
+    )
+    parser.add_argument(
+        "-s", "--sep", dest="sep", type=str, default=",", help="separator for csv (',')"
+    )
+    parser.add_argument(
+        "command", nargs="?", type=str, help="command to send to instrument"
+    )
+
+    return parser.parse_args()
+
 
 
 if __name__ == "__main__":

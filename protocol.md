@@ -58,6 +58,9 @@ Code | binCode      |Command   |  Key               | Description
 0xda | 0b11011010   |peakhold  |  PEAK/LEFT (hold)  | Switch to previous display mode
 0xdb | 0b11011011   |relhold   |  REL/RIGHT (hold)  | Switch to next display mode 
 0xf3 | 0b11110011   |off       |  POWER             | Power off
+0xfa | 0b11111010   |setup     |  REC+UNITS         | Enter/exit setup
+     |              |clm       |  REC+LOAD          | clear manual storage
+     |              |cll       |  REC+POWER         | clear logger storage
 
 
 Commands that request data from the instrument cannot be triggered by button
