@@ -32,7 +32,7 @@ Feedback/bug reports are welcome.
 
 Known issues:
 
-* Timing in `log-live-data` is not accurate – in fact, all I did here was to
+* Timing in teathered logging (`log`) is not accurate – in fact, all I did here was to
   `sleep` for the number of seconds specified in `-I` between samples.  
 * I am not sure what `memload` from the `Stat0` byte does. Once I find
   out I may change the name to reflect its meaning. I'll leave that to a later
@@ -42,7 +42,7 @@ Known issues:
   rather records absolute values. This is kind of inconsistent as the `rel`
   flag *is* recorded. However, tethered logging carried out by this program
   does treat `rel` mode as expected – so don't confuse the two.
-* Sometimes the instrument stores invalid data like seconds > 59. This causes
+* Sometimes the instrument stores invalid data like seconds >59. This causes
   data processing to fail. You can still use raw, hex or construct format but
   repr and csv do not work in those cases...  This is a bug in the instruments
   firmware – there is nothing I can do about it.
@@ -103,29 +103,63 @@ It is also necessary to install pyserial, as follows:
 To communicate with the light meter connect through USB and run the command
 like this:
 
-    usage: pce174.py [-h] [-l] [-i INTERFACE] [-f {csv,repr,construct,raw,hex}]
-                  [-I SAMPLINGINT] [-n SAMPLENO] [-F FILE] [-s SEP]
-                  [command]
+    usage: pce174.py [-h] [-p PORT] [-f {csv,repr,construct,raw,hex}]
+                     [-i SAMPLINGINT] [-n SAMPLENO] [-F FILE] [-s SEP]
+                     [command] [args [args ...]]
 
     Talk to a PCE-174 lightmeter/logger
 
     positional arguments:
       command               command to send to instrument
+      args                  arguments to command
 
     optional arguments:
       -h, --help            show this help message and exit
-      -l, --list            list all available commands
-      -i INTERFACE          interface to connect to (/dev/ttyUSB0)
+      -p PORT               port to connect to (default:/dev/ttyUSB0)
       -f {csv,repr,construct,raw,hex}
-                            specify output format (csv)
-      -I SAMPLINGINT, --samplingint SAMPLINGINT
-                            set sampling interval for tethered logging [s] (1).
+                            specify output format for read commands (default:csv)
+      -i SAMPLINGINT, --samplingint SAMPLINGINT
+                            set sampling interval for tethered logging [s]
+                            (default:1).
       -n SAMPLENO, --sampleno SAMPLENO
-                            set number of samples for tethered logging [s] (-1).
+                            set number of samples for tethered logging [s]
+                            (default: -1).
       -F FILE, --file FILE  parse previously saved raw data instead of reading
                             from the instrument
-      -s SEP, --sep SEP     separator for csv (',')
+      -s SEP, --sep SEP     separator for csv (default:',')
 
+
+    Available commands:
+
+    Simulating button presses on the instrument:
+
+        press {units|light|load|range|apo|rec|setup|peak|rel|max|min|hold|off|up|down|left|right}
+        press {REC|PEAK|REL|LOAD}
+
+    Button identifiers are case sensitive: 
+        lower case: short press
+        upper case: hold/long press
+
+    Getting status/mode information:
+
+        get status
+        get {date|time|unit|range|mode|APO|power|disp|mem|read}
+
+    Setting modes:
+
+        set mode={normal|rel|min|max|pmin|pmax}
+        set range={40|400|4k|40k|400k}
+        set unit={lux|fc}
+        set APO={on|off}
+        set disp={time|day|sampling|year}
+
+    Reading data from the instrument:
+
+        read {live|saved|logger}
+
+    Live logging - i.e. repeatedly reading live data:
+
+        log
 
 On Linux, you might need to configure your user account to have access to
 /dev/ttyUSB0. Alternatively you can run using sudo.
@@ -133,110 +167,8 @@ On Linux, you might need to configure your user account to have access to
 The following list describes all commands that are available as of now. The
 command names were chosen to reflect what they do. Most of them correspond to
 key presses on the instrument. See *Button* entry for this information. For
-conveniance, some commands are redundant in that they refer to the same biutton
+conveniance, some commands are redundant in that they refer to the same button
 press but mean differnt things depending on context.
-
-    Available commands:
-
-      units
-          Toggle units between lux and fc
-          Button: UNITS
-
-      light
-          Toggle backlight
-          Button: Light/LOAD
-
-      range
-          Cycle through measurement ranges
-          Button: RANGE/APO
-
-      save
-          Save reading to memory
-          Button: REC/Setup
-
-      peak
-          Toggle peak value display or next value
-          Button: PEAK/LEFT
-
-      rel
-          Toggle realtive reading or previous value
-          Button: REL/RIGHT
-
-      minmax
-          Toggle Min/Max/current value display or increase value
-          Button: MAX/MIN/UP
-
-      hold
-          Toggle hold or decrease value
-          Button: HOLD/DOWN
-
-      off
-          Turn off the instrument
-          Button: POWER
-
-      logging
-          Start/stop data logging
-          Button: REC-hold
-
-      prevview
-          Switch to previous display view mode
-          Button: PEAK-hold
-
-      nextview
-          Switch to next display view mode
-          Button: REL-hold
-
-      viewsaved
-          Toggle view mode for saved data
-          Button: LIGHT/LOAD-hold
-
-      setup
-          Enter/exit setup
-          Button: REC+UNITS
-
-      APOon
-          Turn on Auto Power-Off (APO)
-          Button: REC+RANGE
-
-      APOoff
-          Turn off Auto Power-Off (APO)
-          Button: REC+RANGE
-
-      get-status
-          Read status
-          Button: None
-
-      get-live-data
-          Read live data
-          Button: None
-
-      log-live-data
-          Log live data. See -I and -n
-          Button: None
-
-      get-saved-data
-          Read manually saved data (registers 1-99)
-          Button: None
-
-      get-logger-data
-          Read logger data
-          Button: None
-
-      up
-          Toggle Min/Max/current value display or increase value
-          Button: MAX/MIN/UP
-
-      down
-          Toggle hold or decrease value
-          Button: HOLD/DOWN
-
-      left
-          Toggle peak value display or next value
-          Button: PEAK/LEFT
-
-      right
-          Toggle realtive reading or previous value
-          Button: REL/RIGHT
 
 
 ## Usage as a module
@@ -288,10 +220,10 @@ Returns the current status of the instrument. E.g.:
     Read:  1
 
 All of the above is also included in the data returned by `get-live-data` but
-all you want is checking status, this command is more conveniant.
+if all you want is checking status, this command is more conveniant.
 
 
-## get-live-data
+## read live
 
 This command reads live data from the instrument. I.e. the current readings.
 This can be used for single readings or automated logging from a computer
@@ -332,20 +264,20 @@ I decided to ignore the weekday. If you need the weekday, better compute it
 from the date.
 
 
-## log-live-data
+## log
 
-This command calls `get-live-data` repeatedly to do tethered live logging. By
+This command calls `read live` repeatedly to do tethered live logging. By
 default it will log every second until interrupted. You can set the logging
 interval with the `-I` option and limit the number of readings with `-n`.
-Negative values of `-n` / `--sampleno` mean that the program will keep loggin
+Negative values of `-n` / `--sampleno` mean that the program will keep logging
 until interrupted.
 
-As for `get-live-data`, the first row contains the column headers in csv
+As for `read live`, the first row contains the column headers in csv
 format. All other formats are simply written to `STDOUT` without any record
 separators.
 
 
-## get-saved-data
+## read saved
 
 This command reads a table of manually saved data from the instrument.
 By default, the command returns comma separated data (CSV) to `STDOUT`.
@@ -377,7 +309,7 @@ memload   | No idea what this is (0/1/2). Name may change in the future.
 See get-live-data for details on other formats and weekday handling.
 
 
-## get-logger-data
+## read logger
 
 This command reads logger data from the instrument.
 By default, the command returns comma separated data (CSV) to `STDOUT`.
@@ -461,11 +393,11 @@ Similar to raw but transcribed to hex representation.
 
 If you write raw data blobs into a file you can later parse it:
 
-    pce174.py get-saved-data -f raw > foo.dat
+    pce174.py read saved -f raw > foo.dat
     
-    pce174.py get-saved-data -F foo.dat
+    pce174.py read saved -F foo.dat
 
-    pce174.py get-saved-data -F foo.dat -f repr
+    pce174.py read saved -F foo.dat -f repr
 
 This may be useful, if you are not sure if you want the data in different
 formats, later or for debugging.  Also it may help for bug reports in order to

@@ -39,7 +39,7 @@ def main():
         # Read data from instrument
         if len(args.args)>1:
             sys.exit("'read' command takes only 1 argument")
-        dat = read_data(port=args.port, datatype=args.args[0], outformat=args.format, sep=args.sep)
+        dat = read_data(port=args.port, datatype=args.args[0], outformat=args.format, sep=args.sep, fromfile=args.file)
         sys.stdout.buffer.write(bytes(dat))
         #print(dat)
     elif args.command=="log":
@@ -48,7 +48,7 @@ def main():
         sys.exit("Unknown command\nTry -h for help")
 
 
-def read_data(port, datatype, outformat, sep, fromfile=False, header=False):
+def read_data(port, datatype, outformat, sep, fromfile="", header=False):
     """
     read data from the instrument and return the results in the specified outformat
 
@@ -73,8 +73,8 @@ def read_data(port, datatype, outformat, sep, fromfile=False, header=False):
     if datatype not in cmd.keys():
         sys.exit("Unknown data type '{}'".format(datatype))
     else:
-        if fromfile:
-            infile = open(port, "rb")
+        if len(fromfile)>0:
+            infile = open(fromfile, "rb")
             dat = infile.read()
             infile.close()
         else:
@@ -742,7 +742,7 @@ def getargs():
 
 Simulating button presses on the instrument:
 
-    press {units|light|load|range|apo|rec|setup|peak|rel|max|min|hold|off|up|down|left|right|}
+    press {units|light|load|range|apo|rec|setup|peak|rel|max|min|hold|off|up|down|left|right}
     press {REC|PEAK|REL|LOAD}
 
 Button identifiers are case sensitive: 
