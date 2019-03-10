@@ -50,7 +50,7 @@ Known issues:
   represented exactly in binary representation. E.g. 110.3 turns into
   110.30000000000001.
 * Mysteriously, the `up` and `down` commands do not seem to work in setup mode.
-
+  This implicates, that you cannot `set` `date`, `time` or `sampling`
 
 ## Credits
 
@@ -128,7 +128,6 @@ like this:
                             from the instrument
       -s SEP, --sep SEP     separator for csv (default:',')
 
-
     Available commands:
 
     Simulating button presses on the instrument:
@@ -143,7 +142,7 @@ like this:
     Getting status/mode information:
 
         get status
-        get {date|time|unit|range|mode|apo|power|disp|mem|read}
+        get {date|time|unit|range|mode|apo|power|view|memload|read_no}
 
     Setting modes:
 
@@ -151,7 +150,7 @@ like this:
         set range={40|400|4k|40k|400k}
         set unit={lux|fc}
         set apo={on|off}
-        set disp={time|day|sampling|year}
+        set view={time|day|sampling|year}
 
     Reading data from the instrument:
 
@@ -197,7 +196,7 @@ Example session:
     
     >>> pce174.process_live_data(container)
     {'date': '2007-08-15', 'mode': 'normal', 'apo': 'on', 'unit': 'lux', 
-    'rawvalue': 7.9, 'hold': 'cont', 'value': 7.9, 'dispmode': 'time', 
+    'rawvalue': 7.9, 'hold': 'cont', 'value': 7.9, 'view': 'time', 
     'power': 'low', 'mem_no': 99, 'read_no': 1, 'range': '400', 'memload': 
     'mem', 'time': '22:24:18'}
 
@@ -208,16 +207,16 @@ See pydoc and/or source code for function documentation.
 
 Returns the current status of the instrument. E.g.:
 
-    Date:  2007-08-16
-    Time:  19:47:34
-    Units: lux
-    Range: 400
-    mode:  normal
-    apo:   on
-    Power: ok
-    Disp:  time
-    Mem:   None
-    Read:  1
+    date:       2019-03-10
+    time:       15:55:40
+    unit:       lux
+    range:      400
+    mode:       normal
+    apo:        on
+    power:      ok
+    view:       time
+    memload:    None
+    read_no:    1
 
 All of the above is also included in the data returned by `get-live-data` but
 if all you want is checking status, this command is more conveniant.
@@ -230,7 +229,7 @@ This can be used for single readings or automated logging from a computer
 without using the logging feature of the instrument.  By default, the command
 returns comma separated data (CSV) to `STDOUT`.  Example:
 
-    date,time,value,rawvalue,unit,range,mode,hold,apo,power,dispmode,memload,mem_no,read_no
+    date,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memload,mem_no,read_no
     2007-08-15,23:49:58,21.1,21.1,lux,400,normal,cont,on,ok,time,mem,27,12
 
 The first row contains column headers with the following meaning:
@@ -256,12 +255,10 @@ In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
 `rawvalue` contains the absolute reading (that would be measured without *rel*
 mode) and `value` is the relative reading as displayed on the screen.
 
-The binary data from the instrument includes a `weekday` field in the data
-which is completely ignored by this script, because it has a few issues: The
-weekday is a number (1-7) and manually set – i.e. the instrument does not try
-to ensure that the weekday entry matches the date. In order to avoid confusion,
-I decided to ignore the weekday. If you need the weekday, better compute it
-from the date.
+The binary data from the instrument includes a numeric `weekday` field in the
+data which has a few issues: `weekday` is manually set – i.e. the instrument
+does not try to ensure that the weekday entry matches the date. If you need the 
+weekday, don;t trust this data and compute it from the date.
 
 
 ## log

@@ -30,24 +30,27 @@ def main():
         # button presses
         press_button(args.port, args.args)
     elif args.command=="get":
-        # XXX get status of a variable
         if len(args.args)!=1:
             sys.exit("'get' command takes exactly 1 argument ({} given)".format(len(args.args)))
         print(getvar(args.port, args.args[0]))
-#    elif args.command=="set":
-#        # XXX set status of a variable
-#        setvar(args.args)
+    elif args.command=="set":
+        if len(args.args)!=2:
+            sys.exit("'set' command takes exactly 2 argument ({} given)".format(len(args.args)))
+        setvar(args.port, var=args.args[0], value=args.args[1])
     elif args.command=="read":
         # Read data from instrument
         if len(args.args)!=1:
             sys.exit("'read' command takes exactly 1 argument ({} given)".format(len(args.args)))
-        dat = read_data(port=args.port, datatype=args.args[0], outformat=args.format, sep=args.sep, fromfile=args.file)
+        dat = read_data(port=args.port, datatype=args.args[0], outformat=args.format, sep=args.sep, fromfile=args.file, header=True)
+        if args.format in ('repr', 'csv', 'construct'):
+            dat = str(dat) + "\n"
+            dat = dat.encode("utf-8")
         sys.stdout.buffer.write(bytes(dat))
         #print(dat)
     elif args.command=="log":
         log_live_data(port=args.port, outformat=args.format, sampleno=args.sampleno, interval=args.samplingint, sep=args.sep)
     else:
-        sys.exit("Unknown command\nTry -h for help")
+        sys.exit("Unknown command `{}`\nTry -h for help".format(args.command))
 
 
 def getvar(port, var):
@@ -57,6 +60,7 @@ def getvar(port, var):
     dat = read_data(port=port, datatype='live', outformat='raw')
     dat = parse_live_data(dat)
     dat = process_live_data(dat)
+
     if var=="status":
         dat = """date:       {date}
 time:       {time}
@@ -65,7 +69,7 @@ range:      {range}
 mode:       {mode}
 apo:        {apo}
 power:      {power}
-dispmode:   {dispmode}
+view:       {view}
 memload:    {memload}
 read_no:    {read_no}""".format_map(dat)
     else:
@@ -97,6 +101,7 @@ def read_data(port, datatype, outformat, sep=",", fromfile="", header=False):
             "logger":   0x13
             }
 
+    dat = None
     if datatype not in cmd.keys():
         sys.exit("Unknown data type '{}'".format(datatype))
     else:
@@ -104,19 +109,35 @@ def read_data(port, datatype, outformat, sep=",", fromfile="", header=False):
             infile = open(fromfile, "rb")
             dat = infile.read()
             infile.close()
-        else:
-            dat = send_cmd(port, cmd[datatype], read=True) 
-        if outformat == "raw":
-            pass
-        elif outformat == "hex":
-            dat = binascii.hexlify(dat)
-        elif outformat in ("csv", "repr", "construct"):
-            dat = decode_blob(dat, datatype, outformat, sep, header=header)
-            dat = str(dat) + "\n"
-            dat = dat.encode("utf-8")
-        else:
-            sys.exit("Unknown format {}".format(outformat))
+        dat = send_cmd(port, cmd[datatype], read=True) 
+        dat = decode_blob(dat, datatype, outformat, sep, header=header)
     return dat
+
+
+def setvar(port, var, value):
+    "set variable var to value"
+
+    validvars = {
+            'mode':     ('normal', 'rel', 'min', 'max', 'pmin', 'pmax'), 
+            'range':    {
+                'lux':  ('400k', '400', '4k', '40k'), 
+                'fc':   ('40k', '40', '400', '4k')
+                },
+            'unit':     ('lux', 'fc'), 
+            'apo':      ('on', 'off'), 
+            'view':     ('time', 'day', 'sampling', 'year')
+            }
+
+    if var in validvars:
+        # check validity of value arg
+        curval = getvar(port, var)
+        print ("current value:", curval)
+
+        # press keys to get there
+        # test if reached
+    else:
+        sys.exit("{} is not a valid argument to `set`".format(var))
+   
 
 
 def log_live_data(port, outformat, sampleno, interval, sep=","):
@@ -128,6 +149,8 @@ def log_live_data(port, outformat, sampleno, interval, sep=","):
     i = 0
     while True:
         dat = read_data(port=port, datatype="live", outformat=outformat, sep=sep, header=i==0)
+        dat = str(dat) + "\n"
+        dat = dat.encode("utf-8")
         sys.stdout.buffer.write(bytes(dat))
         sys.stdout.flush()
         i += 1
@@ -136,18 +159,6 @@ def log_live_data(port, outformat, sampleno, interval, sep=","):
                 break
         time.sleep(interval)
     return
-
-
-def send_command(port, command):
-    """Send a known command to instrument
-
-    port     : string indicating the serial port to use. E.g. /dev/ttyUSB0
-    command  : must be one of the valid command strings defined in commandset
-
-    returns the binary blob that is received in response or empty byte array
-    """
-
-    return send_cmd(port, commandset[command]["cmd"], read=commandset[command]["ret"])
 
 
 def press_button(port, button):
@@ -251,402 +262,56 @@ def decode_blob(blob, cmd, outformat, sep, header=True):
     Central dispatch for the different parsing, processing and csv translation steps
     """
 
-    ret = None
+    dat = None
     if cmd == "live":
-        ret = parse_live_data(blob)
-        if outformat in ("csv", "repr"):
-            ret = process_live_data(ret)
-        if outformat == ("csv"):
-            ret = live_data2csv(ret, sep, header=header)
+        dat = parse_live_data(blob) # blob -> construct
+        if outformat == "raw":
+            dat = blob
+        elif outformat == "hex":
+            dat = binascii.hexlify(blob) # blob -> hex
+        elif outformat == "construct":
+            pass
+        elif outformat == "repr":
+            dat = process_live_data(dat) # blob -> repr
+        elif outformat == "csv":
+            dat = process_live_data(dat) # blob -> repr
+            dat = live_data2csv(dat, sep, header=header) # repr -> csv
+        else:
+            raise Exception("Unknown format `{}`".format(outformat))
     elif cmd == "saved":
-        ret = parse_saved_data(blob)
-        if outformat in ("csv", "repr"):
-            ret = process_saved_data(ret)
-        if outformat == ("csv"):
-            ret = saved_data2csv(ret, sep)
+        dat = parse_saved_data(blob)
+        if outformat == "raw":
+            dat = blob
+        elif outformat == "hex":
+            dat = binascii.hexlify(blob)
+        elif outformat == "construct":
+            pass
+        elif outformat == "repr":
+            dat = process_saved_data(dat)
+        elif outformat == "csv":
+            dat = process_saved_data(dat)
+            dat = saved_data2csv(dat, sep)
+        else:
+            raise Exception("Unknown format `{}`".format(outformat))
     elif cmd == "logger":
-        ret = parse_logger_data(blob)
-        if outformat in ("csv", "repr"):
-            ret = process_logger_data(ret)
-        if outformat == ("csv"):
-            ret = logger_data2csv(ret, sep)
+        dat = parse_logger_data(blob)
+        if outformat == "raw":
+            dat = blob
+        elif outformat == "hex":
+            dat = binascii.hexlify(blob)
+        elif outformat == "construct":
+            pass
+        elif outformat == "repr":
+            dat = process_logger_data(dat)
+        elif outformat == "csv":
+            dat = process_logger_data(dat)
+            dat = logger_data2csv(dat, sep)
+        else:
+            raise Exception("Unknown format `{}`".format(outformat))
     else:
-        raise Exception("Unknown command.")
-
-
-    return ret
-
-
-def parse_live_data(blob):
-    """parse live data to construct container
-
-    Accept a binary blob of live data and parse it.
-    Returns a construct container object with parsed data.
-    """
-
-    Live_data = Struct(
-        "magic" / Const(b"\xaa\xdd"),
-        Padding(1),
-        "year" / Int8ub,
-        "weekday" / Int8ub,
-        "month" / Int8ub,
-        "day" / Int8ub,
-        "hour" / Int8ub,
-        "minute" / Int8ub,
-        "second" / Int8ub,
-        "dat0H" / Int8ub,
-        "dat0L" / Int8ub,
-        "dat1H" / Int8ub,
-        "dat1L" / Int8ub,
-        "stat0" / Int8ub,
-        "stat1" / Int8ub,
-        "mem_no" / Int8ub,
-        "read_no" / Int8ub,
-    )
-
-    return Live_data.parse(blob)
-
-
-
-def process_live_data(rec):
-    """Return processed live data
-
-    Accepts a construct container object and returns a dict
-    representing the measurement.
-
-    Processing comprises the assembly of common time and date formats as well
-    as turning bit fields into human readable values.
-
-    Measurement records are dicts with the following keys:
-
-    Key       | Description
-    ----------|-----------------------------------------------
-    date      | Date in ISO-8601 format (YYYY-MM-DD)
-    time      | Time (HH:MM:SS)
-    value     | Numerical value of reading
-    rawvalue  | raw numerical value
-    unit      | Unit of measurement (lux/fc)
-    range     | Measurement range used (40, 400, ... 4000k)
-    mode      | normal/Pmin/Pmax/min/max/rel
-    hold      | Was hold active? (hold/cont)
-    apo       | Auto-power-off (on/off)
-    power     | Power status (ok/low)
-    dispmode  | Active display mode (time/day/sampling/year)
-    memload   | No idea what this is (0/1/2). Name may change in the future.
-    mem_no    | Number of manually saved records in memory. (See get-saved-data)
-    read_no   | ?
-    """
-
-    # bcd decoding
-    for key in ["year", "weekday", "month", "day", "hour", "minute", "second"]:
-        rec[key] = bcd2int(rec[key])
-
-    stat0 = decode_stat0(rec["stat0"])
-    stat1 = decode_stat1(rec["stat1"])
-
-    # reassemble the record in a more practical format
-    rec = {
-        "date": "20%2.2i-%2.2i-%2.2i" % (rec["year"], rec["month"], rec["day"]),
-        "time": "%2.2i:%2.2i:%2.2i" % (rec["hour"], rec["minute"], rec["second"]),
-        "value": stat1["sign"] * (100 * rec["dat1H"] + rec["dat1L"]) * stat0["Frange"],
-        "rawvalue": (100 * rec["dat0H"] + rec["dat0L"]) * stat0["Frange"],
-        "unit": stat0["unit"],
-        "range": stat0["range"],
-        "mode": stat0["mode"],
-        "hold": stat0["hold"],
-        "apo": stat0["apo"],
-        "power": stat1["power"],
-        "dispmode": stat1["dispmode"],
-        "memload": stat1["memload"],
-        "mem_no": rec["mem_no"],
-        "read_no": rec["read_no"],
-    }
-
-    return rec
-
-
-def live_data2csv(dat, sep, header=True):
-    """returns csv from live data dict"""
-
-    # define columns and assemble header
-    cols = (
-        "date",
-        "time",
-        "value",
-        "rawvalue",
-        "unit",
-        "range",
-        "mode",
-        "hold",
-        "apo",
-        "power",
-        "dispmode",
-        "memload",
-        "mem_no",
-        "read_no",
-    )
-
-    csv = []
-    if header:
-        csv = [sep.join(cols)]
-    csv.append(sep.join(([str(dat[col]) for col in cols])))
-
-    return "\n".join(csv)
-
-
-def parse_saved_data(blob):
-    """parse saved data to construct container
-
-    Accept a binary blob of saved data and parse it.
-    Returns a construct container object with parsed data.
-    """
-
-    record = Struct(
-        "foo" / Int8ub,  # should be 0x00 but isn't always
-        #'magic' / Const(b'\x00'),
-        "year" / Int8ub,
-        "week" / Int8ub,
-        "month" / Int8ub,
-        "day" / Int8ub,
-        "hour" / Int8ub,
-        "minute" / Int8ub,
-        "second" / Int8ub,
-        "pos" / Int8ub,
-        "datH" / Int8ub,
-        "datL" / Int8ub,
-        "stat0" / Int8ub,
-        "stat1" / Int8ub,
-    )
-
-    db = Struct("magic" / Const(b"\xbb\x88"), "data" / Array(99, record))
-
-    return db.parse(blob)
-
-
-def process_saved_data(dat):
-    """Return processed saved data
-
-    Accepts a construct container object and returns a list of dicts
-    Each dict represents one saved measurement.
-
-    Processing comprises the assembly of common time and date formats as well as
-    turning bit fields into human readable values.
-
-    Saved data records are dicts with the folloing keys:
-
-    Key       | Description
-    ----------|-----------------------------------------------
-    pos       | Number of the storage position
-    date      | Date in ISO-8601 format (YYYY-MM-DD)
-    time      | Time (HH:MM:SS)
-    value     | Numerical value
-    unit      | Unit of measurement (lux/fc)
-    range     | Measurement range used (40, 400, ... 400k)
-    mode      | normal/Pmin/Pmax/min/max/rel
-    hold      | Was hold active? (hold/cont)
-    apo       | Auto-power-off (on/off)
-    power     | Power status (ok/low)
-    dispmode  | Active display mode (time/day/sampling/year)
-    memload   | No idea what this is (0/1/2). Name may change in the future.
-    """
-
-    dat2 = []
-    for rec in dat["data"]:
-        if rec["pos"] == 0:
-            break
-        # bcd decoding
-        for key in ["year", "week", "month", "day", "hour", "minute", "second"]:
-            rec[key] = bcd2int(rec[key])
-
-        stat0 = decode_stat0(rec["stat0"])
-        stat1 = decode_stat1(rec["stat1"])
-
-        dtime = datetime.datetime(
-            2000 + rec["year"],
-            rec["month"],
-            rec["day"],
-            rec["hour"],
-            rec["minute"],
-            rec["second"],
-        )
-
-        # reassemble the record in a more practical format
-        rec = {
-            "pos": rec["pos"],
-            "date": dtime.date(),
-            "time": dtime.time(),
-            "value": stat1["sign"]
-            * (100 * rec["datH"] + rec["datL"])
-            * stat0["Frange"],
-            "unit": stat0["unit"],
-            "range": stat0["range"],
-            "mode": stat0["mode"],
-            "hold": stat0["hold"],
-            "apo": stat0["apo"],
-            "power": stat1["power"],
-            "dispmode": stat1["dispmode"],
-            "memload": stat1["memload"],
-        }
-
-        dat2.append(rec)
-
-    return dat2
-
-
-def saved_data2csv(dat, sep, header=True):
-    "returns csv from live data dict"
-
-    cols = (
-        "pos",
-        "date",
-        "time",
-        "value",
-        "unit",
-        "range",
-        "mode",
-        "hold",
-        "apo",
-        "power",
-        "dispmode",
-        "memload",
-    )
-    csv = []
-    if header:
-        csv = [sep.join(cols)]
-    for rec in dat:
-        if rec["pos"] > 0:
-            csv.append(sep.join(([str(rec[col]) for col in cols])))
-
-    return "\n".join(csv)
-
-
-def parse_logger_data(blob):
-    """Decode logger_data to csv
-
-    Accept a binary blob of logger data and parse it.
-    Returns a cosntruct container object with parsed data.
-    """
-
-    Datapoint = Struct(
-        "datH" / Int8ub, "datL" / Int8ub, "stat0" / Int8ub, "next" / Peek(Int16ub)
-    )
-
-    Group = Struct(
-        "magic" / Const(b"\xaa\x56"),
-        "groupno" / Int8ub,
-        "sampling" / Int8ub,
-        "reserved" / Const(b"\x00\x00"),
-        "year" / Int8ub,
-        "weekday" / Int8ub,
-        "month" / Int8ub,
-        "day" / Int8ub,
-        "hour" / Int8ub,
-        "minute" / Int8ub,
-        "second" / Int8ub,
-        "data"
-        / RepeatUntil(
-            lambda x, lst, ctx: x.next == 0xAA56 or x.next == None, Datapoint
-        ),
-    )
-
-    db = Struct(
-        "magic" / Const(b"\xaa\xcc"),
-        "nogroups" / Int8ub,
-        "bufsize" / Int16ub,
-        "groups" / Array(this.nogroups, Group),
-    )
-
-    dat = db.parse(blob)
+        raise Exception("Unknown command `{}`.".format(cmd))
 
     return dat
-
-
-def process_logger_data(dat):
-    """Return processed logger data
-
-    Accepts a construct container object and returns a list of logging groups.
-
-    Each group is a list of data points. Datapoints are dicts with the following keys:
-
-    Key       | Description
-    ----------|-------------------------------------------------
-    groupno   | numerical id of the logging group
-    id        | measurement number within the group [0,1, ...]
-    sampling  | sampling interval [s]
-    date      | YYYY-MM-DD
-    time      | HH:MM:SS
-    value     | measurement
-    unit      | Unit of measurement (lux/fc)
-    range     | Measurement range used (40, 400, ... 400k)
-    mode      | normal/Pmin/Pmax/min/max/rel
-    hold      | Was hold active? (hold/cont)
-    apo       | Auto-power-off (on/off)
-
-    """
-
-    logger = []
-    for group in dat["groups"]:
-        # bcd decoding
-        for key in ["year", "weekday", "month", "day", "hour", "minute", "second"]:
-            group[key] = bcd2int(group[key])
-
-        dtime = datetime.datetime(
-            2000 + group["year"],
-            group["month"],
-            group["day"],
-            group["hour"],
-            group["minute"],
-            group["second"],
-        )
-
-        for i, rec in enumerate(group["data"]):
-
-            stat0 = decode_stat0(rec["stat0"])
-
-            # reassemble the record in a more practical format
-            rec = {
-                "groupno": group["groupno"],
-                "id": i,
-                "sampling": group["sampling"],
-                "date": dtime.date(),
-                "time": dtime.time(),
-                #'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
-                "value": (100 * rec["datH"] + rec["datL"]) * stat0["Frange"],
-                "unit": stat0["unit"],
-                "range": stat0["range"],
-                "mode": stat0["mode"],
-                "hold": stat0["hold"],
-                "apo": stat0["apo"],
-            }
-
-            logger.append(rec)
-            dtime += datetime.timedelta(seconds=group["sampling"])
-
-    return logger
-
-
-def logger_data2csv(dat, sep, header=True):
-    "returns csv from logger data list"
-
-    cols = (
-        "groupno",
-        "id",
-        "date",
-        "time",
-        "value",
-        "unit",
-        "range",
-        "mode",
-        "hold",
-        "apo",
-    )
-    csv = []
-    if header:
-        csv = [sep.join(cols)]
-    for rec in dat:
-        csv.append(sep.join(([str(rec[col]) for col in cols])))
-
-    return "\n".join(csv)
 
 
 def decode_stat0(byte):
@@ -721,22 +386,399 @@ def decode_stat1(byte):
         BitsInteger(2),
         "power" / Flag,
         "sign" / Flag,
-        "dispmode" / BitsInteger(2),
+        "view" / BitsInteger(2),
         "memload" / BitsInteger(2),
     )
 
     ret = Stat1.parse(bytes([byte]))
 
-    dispmode = {0b00: "time", 0b01: "day", 0b10: "sampling", 0b11: "year"}
+    view = {0b00: "time", 0b01: "day", 0b10: "sampling", 0b11: "year"}
 
     memload = {0b00: None, 0b01: "mem", 0b10: "load", 0b11: None}
 
     ret["power"] = ("ok", "low")[ret["power"]]
     ret["sign"] = (1, -1)[ret["sign"]]
-    ret["dispmode"] = dispmode[ret["dispmode"]]
+    ret["view"] = view[ret["view"]]
     ret["memload"] = memload[ret["memload"]]
 
     return ret
+
+
+def parse_live_data(blob):
+    """return construct container from live data blob
+
+    Accept a binary blob of live data and parse it.
+    """
+
+    Live_data = Struct(
+        "magic" / Const(b"\xaa\xdd"),
+        Padding(1),
+        "year" / Int8ub,
+        "weekday" / Int8ub,
+        "month" / Int8ub,
+        "day" / Int8ub,
+        "hour" / Int8ub,
+        "minute" / Int8ub,
+        "second" / Int8ub,
+        "dat0H" / Int8ub,
+        "dat0L" / Int8ub,
+        "dat1H" / Int8ub,
+        "dat1L" / Int8ub,
+        "stat0" / Int8ub,
+        "stat1" / Int8ub,
+        "mem_no" / Int8ub,
+        "read_no" / Int8ub,
+    )
+
+    return Live_data.parse(blob)
+
+
+def parse_saved_data(blob):
+    """return a construct container from saved data blob
+
+    Accept a binary blob of saved data and parse it.
+    Returns a construct container object with parsed data.
+    """
+
+    record = Struct(
+        "foo" / Int8ub,  # should be 0x00 but isn't always
+        #'magic' / Const(b'\x00'),
+        "year" / Int8ub,
+        "weekday" / Int8ub,
+        "month" / Int8ub,
+        "day" / Int8ub,
+        "hour" / Int8ub,
+        "minute" / Int8ub,
+        "second" / Int8ub,
+        "pos" / Int8ub,
+        "datH" / Int8ub,
+        "datL" / Int8ub,
+        "stat0" / Int8ub,
+        "stat1" / Int8ub,
+    )
+
+    db = Struct("magic" / Const(b"\xbb\x88"), "data" / Array(99, record))
+
+    return db.parse(blob)
+
+
+def parse_logger_data(blob):
+    """return construct container from logger_data blob
+
+    Accept a binary blob of logger data and parse it.
+    Returns a cosntruct container object with parsed data.
+    """
+
+    Datapoint = Struct(
+        "datH" / Int8ub, "datL" / Int8ub, "stat0" / Int8ub, "next" / Peek(Int16ub)
+    )
+
+    Group = Struct(
+        "magic" / Const(b"\xaa\x56"),
+        "groupno" / Int8ub,
+        "sampling" / Int8ub,
+        "reserved" / Const(b"\x00\x00"),
+        "year" / Int8ub,
+        "weekday" / Int8ub,
+        "month" / Int8ub,
+        "day" / Int8ub,
+        "hour" / Int8ub,
+        "minute" / Int8ub,
+        "second" / Int8ub,
+        "data"
+        / RepeatUntil(
+            lambda x, lst, ctx: x.next == 0xAA56 or x.next == None, Datapoint
+        ),
+    )
+
+    db = Struct(
+        "magic" / Const(b"\xaa\xcc"),
+        "nogroups" / Int8ub,
+        "bufsize" / Int16ub,
+        "groups" / Array(this.nogroups, Group),
+    )
+
+    dat = db.parse(blob)
+
+    return dat
+
+
+def process_live_data(rec):
+    """Return live data dict from construct container
+
+    Accepts a construct container object and returns a dict
+    representing the measurement.
+
+    Processing comprises the assembly of common time and date formats as well
+    as turning bit fields into human readable values.
+
+    Measurement records are dicts with the following keys:
+
+    Key       | Description
+    ----------|-----------------------------------------------
+    date      | Date in ISO-8601 format (YYYY-MM-DD)
+    weekday   | Int (1-7)
+    time      | Time (HH:MM:SS)
+    value     | Numerical value of reading
+    rawvalue  | raw numerical value
+    unit      | Unit of measurement (lux/fc)
+    range     | Measurement range used (40, 400, ... 4000k)
+    mode      | normal/Pmin/Pmax/min/max/rel
+    hold      | Was hold active? (hold/cont)
+    apo       | Auto-power-off (on/off)
+    power     | Power status (ok/low)
+    view      | Active view mode (time/day/sampling/year)
+    memload   | No idea what this is (0/1/2). Name may change in the future.
+    mem_no    | Number of manually saved records in memory. (See get-saved-data)
+    read_no   | ?
+    """
+
+    # bcd decoding
+    for key in ["year", "weekday", "month", "day", "hour", "minute", "second"]:
+        rec[key] = bcd2int(rec[key])
+
+    stat0 = decode_stat0(rec["stat0"])
+    stat1 = decode_stat1(rec["stat1"])
+
+    # reassemble the record in a more practical format
+    rec = {
+        "date": "20%2.2i-%2.2i-%2.2i" % (rec["year"], rec["month"], rec["day"]),
+        "weekday": rec["weekday"],
+        "time": "%2.2i:%2.2i:%2.2i" % (rec["hour"], rec["minute"], rec["second"]),
+        "value": stat1["sign"] * (100 * rec["dat1H"] + rec["dat1L"]) * stat0["Frange"],
+        "rawvalue": (100 * rec["dat0H"] + rec["dat0L"]) * stat0["Frange"],
+        "unit": stat0["unit"],
+        "range": stat0["range"],
+        "mode": stat0["mode"],
+        "hold": stat0["hold"],
+        "apo": stat0["apo"],
+        "power": stat1["power"],
+        "view": stat1["view"],
+        "memload": stat1["memload"],
+        "mem_no": rec["mem_no"],
+        "read_no": rec["read_no"],
+    }
+
+    return rec
+
+
+def process_saved_data(dat):
+    """Return saved data dict from construct container
+
+    Accepts a construct container object and returns a list of dicts
+    Each dict represents one saved measurement.
+
+    Processing comprises the assembly of common time and date formats as well as
+    turning bit fields into human readable values.
+
+    Saved data records are dicts with the folloing keys:
+
+    Key       | Description
+    ----------|-----------------------------------------------
+    pos       | Number of the storage position
+    date      | Date in ISO-8601 format (YYYY-MM-DD)
+    weekday   | Int (1-7)
+    time      | Time (HH:MM:SS)
+    value     | Numerical value
+    unit      | Unit of measurement (lux/fc)
+    range     | Measurement range used (40, 400, ... 400k)
+    mode      | normal/Pmin/Pmax/min/max/rel
+    hold      | Was hold active? (hold/cont)
+    apo       | Auto-power-off (on/off)
+    power     | Power status (ok/low)
+    view      | Active view mode (time/day/sampling/year)
+    memload   | No idea what this is (0/1/2). Name may change in the future.
+    """
+
+    dat2 = []
+    for rec in dat["data"]:
+        if rec["pos"] == 0: # we have reached the first empty register position
+            break
+        # bcd decoding
+        for key in ["year", "weekday", "month", "day", "hour", "minute", "second"]:
+            rec[key] = bcd2int(rec[key])
+
+        stat0 = decode_stat0(rec["stat0"])
+        stat1 = decode_stat1(rec["stat1"])
+
+        dtime = datetime.datetime(
+            2000 + rec["year"],
+            rec["month"],
+            rec["day"],
+            rec["hour"],
+            rec["minute"],
+            rec["second"],
+        )
+
+        # reassemble the record in a more practical format
+        rec = {
+            "pos": rec["pos"],
+            "date": dtime.date(),
+            "weekday": rec["weekday"],
+            "time": dtime.time(),
+            "value": stat1["sign"] * (100 * rec["datH"] + rec["datL"]) * stat0["Frange"],
+            "unit": stat0["unit"],
+            "range": stat0["range"],
+            "mode": stat0["mode"],
+            "hold": stat0["hold"],
+            "apo": stat0["apo"],
+            "power": stat1["power"],
+            "view": stat1["view"],
+            "memload": stat1["memload"],
+        }
+
+        dat2.append(rec)
+
+    return dat2
+
+
+def process_logger_data(dat):
+    """Return processed logger data
+
+    Accepts a construct container object and returns a list of logging groups.
+
+    Each group is a list of data points. Datapoints are dicts with the following keys:
+
+    Key       | Description
+    ----------|-------------------------------------------------
+    groupno   | numerical id of the logging group
+    id        | measurement number within the group [0,1, ...]
+    sampling  | sampling interval [s]
+    date      | YYYY-MM-DD
+    weekday   | Int (1-7)
+    time      | HH:MM:SS
+    value     | measurement
+    unit      | Unit of measurement (lux/fc)
+    range     | Measurement range used (40, 400, ... 400k)
+    mode      | normal/Pmin/Pmax/min/max/rel
+    hold      | Was hold active? (hold/cont)
+    apo       | Auto-power-off (on/off)
+
+    """
+
+    logger = []
+    for group in dat["groups"]:
+        # bcd decoding
+        for key in ["year", "weekday", "month", "day", "hour", "minute", "second"]:
+            group[key] = bcd2int(group[key])
+
+        dtime = datetime.datetime(
+            2000 + group["year"],
+            group["month"],
+            group["day"],
+            group["hour"],
+            group["minute"],
+            group["second"],
+        )
+
+        for i, rec in enumerate(group["data"]):
+
+            stat0 = decode_stat0(rec["stat0"])
+
+            # reassemble the record in a more practical format
+            rec = {
+                "groupno": group["groupno"],
+                "id": i,
+                "sampling": group["sampling"],
+                "date": dtime.date(),
+                "weekday": group["weekday"],
+                "time": dtime.time(),
+                #'value'    : stat1['sign'] * (100*rec['datH'] + rec['datL']) * stat0['Frange'],
+                "value": (100 * rec["datH"] + rec["datL"]) * stat0["Frange"],
+                "unit": stat0["unit"],
+                "range": stat0["range"],
+                "mode": stat0["mode"],
+                "hold": stat0["hold"],
+                "apo": stat0["apo"],
+            }
+
+            logger.append(rec)
+            dtime += datetime.timedelta(seconds=group["sampling"])
+
+    return logger
+
+
+def live_data2csv(dat, sep, header=True):
+    """returns csv from live data dict"""
+
+    # define columns and assemble header
+    cols = (
+        "date",
+        "weekday",
+        "time",
+        "value",
+        "rawvalue",
+        "unit",
+        "range",
+        "mode",
+        "hold",
+        "apo",
+        "power",
+        "view",
+        "memload",
+        "mem_no",
+        "read_no",
+    )
+
+    csv = []
+    if header:
+        csv = [sep.join(cols)]
+    csv.append(sep.join(([str(dat[col]) for col in cols])))
+
+    return "\n".join(csv)
+
+
+def saved_data2csv(dat, sep, header=True):
+    "returns csv from live data dict"
+
+    cols = (
+        "pos",
+        "date",
+        "weekday",
+        "time",
+        "value",
+        "unit",
+        "range",
+        "mode",
+        "hold",
+        "apo",
+        "power",
+        "view",
+        "memload",
+    )
+    csv = []
+    if header:
+        csv = [sep.join(cols)]
+    for rec in dat:
+        if rec["pos"] > 0:
+            csv.append(sep.join(([str(rec[col]) for col in cols])))
+
+    return "\n".join(csv)
+
+
+def logger_data2csv(dat, sep, header=True):
+    "returns csv from logger data list"
+
+    cols = (
+        "groupno",
+        "id",
+        "date",
+        "weekday",
+        "time",
+        "value",
+        "unit",
+        "range",
+        "mode",
+        "hold",
+        "apo",
+    )
+    csv = []
+    if header:
+        csv = [sep.join(cols)]
+    for rec in dat:
+        csv.append(sep.join(([str(rec[col]) for col in cols])))
+
+    return "\n".join(csv)
 
 
 def getargs():
@@ -760,17 +802,20 @@ Button identifiers are case sensitive:
 Getting status/mode information:
 
     get status
-    get {date|time|unit|range|mode|apo|power|disp|mem|read}
+    get {date|time|unit|range|mode|apo|power|view|memload|read_no}
 
 
 Setting modes:
 
     set mode={normal|rel|min|max|pmin|pmax}
-    set range={40|400|4k|40k|400k}
+    set range={400|4k|40k|400k}      # for lux
+    set range={40|400|4k|40k}        # for fc
     set unit={lux|fc}
     set apo={on|off}
-    set disp={time|day|sampling|year}
+    set view={time|day|sampling|year}
 
+Valid `range` values depend on the current value of `unit` and will change
+magically, when the unit is changed. I.e. always set `unit` before `range`.
 
 Reading data from the instrument:
 

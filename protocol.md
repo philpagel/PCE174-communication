@@ -261,7 +261,7 @@ Bits  | Meaning | Values
 6     | Hold    | 0: cont, 1: hold
 5,4,3 | Mode    | 000:normal, 010:Pmin, 011:Pmax, 100:max, 101:min, 110:rel
 2     | units   | 0:lux, 1:fc
-0,1   | range   | 00:level3, 01:level2, 10:level3 ,11:level0
+0,1   | range   | 00:level3, 01:level2, 10:level1 ,11:level0
 
 
 range level | lux  | fc
@@ -282,7 +282,7 @@ Bits  | Meaning       | Values
 7,6   | reserved      |
 5     | power         | 0:ok, 1:low
 4     | sign          | 0:+, 1:-
-3,2   | displaymode   | 00:time, 01:day, 10:sampling-interval, 11:year
+3,2   | view          | 00:time, 01:day, 10:sampling-interval, 11:year
 1,0   | memload       | 01:MEM, 10:LOAD
 
 The sign must be multiplied with value, as the value data is always unsigned.
