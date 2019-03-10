@@ -29,16 +29,18 @@ def main():
     if args.command=="press":
         # button presses
         press_button(args.port, args.args)
-#    elif args.command=="get":
-#        # XXX get status of a variable
-#        getvar(args.args)
+    elif args.command=="get":
+        # XXX get status of a variable
+        if len(args.args)!=1:
+            sys.exit("'get' command takes exactly 1 argument ({} given)".format(len(args.args)))
+        print(getvar(args.port, args.args[0]))
 #    elif args.command=="set":
 #        # XXX set status of a variable
 #        setvar(args.args)
     elif args.command=="read":
         # Read data from instrument
-        if len(args.args)>1:
-            sys.exit("'read' command takes only 1 argument")
+        if len(args.args)!=1:
+            sys.exit("'read' command takes exactly 1 argument ({} given)".format(len(args.args)))
         dat = read_data(port=args.port, datatype=args.args[0], outformat=args.format, sep=args.sep, fromfile=args.file)
         sys.stdout.buffer.write(bytes(dat))
         #print(dat)
@@ -48,7 +50,32 @@ def main():
         sys.exit("Unknown command\nTry -h for help")
 
 
-def read_data(port, datatype, outformat, sep, fromfile="", header=False):
+def getvar(port, var):
+    """return the requested type of mode/status data
+    """
+
+    dat = read_data(port=port, datatype='live', outformat='raw')
+    dat = parse_live_data(dat)
+    dat = process_live_data(dat)
+    if var=="status":
+        dat = """date:       {date}
+time:       {time}
+unit:       {unit}
+range:      {range}
+mode:       {mode}
+apo:        {apo}
+power:      {power}
+dispmode:   {dispmode}
+memload:    {memload}
+read_no:    {read_no}""".format_map(dat)
+    else:
+        if var not in dat.keys():
+            sys.exit("Unknown parameter '{}'".format(var))
+        dat = dat[var] 
+    return dat
+
+
+def read_data(port, datatype, outformat, sep=",", fromfile="", header=False):
     """
     read data from the instrument and return the results in the specified outformat
 
@@ -225,10 +252,7 @@ def decode_blob(blob, cmd, outformat, sep, header=True):
     """
 
     ret = None
-    if cmd == "status":
-        ret = parse_live_data(blob)
-        ret = process_stat_data(ret)
-    elif cmd in ("live", 'log-live-data'):
+    if cmd == "live":
         ret = parse_live_data(blob)
         if outformat in ("csv", "repr"):
             ret = process_live_data(ret)
@@ -283,23 +307,6 @@ def parse_live_data(blob):
     return Live_data.parse(blob)
 
 
-def process_stat_data(rec):
-    """Return status information in human readable form"""
-
-    dat = process_live_data(rec)
-    ret = """Date:  {date}
-Time:  {time}
-Units: {unit}
-Range: {range}
-mode:  {mode}
-APO:   {APO}
-Power: {power}
-Disp:  {dispmode}
-Mem:   {memload}
-Read:  {read_no}""".format_map(dat)
-
-    return ret
-
 
 def process_live_data(rec):
     """Return processed live data
@@ -310,7 +317,7 @@ def process_live_data(rec):
     Processing comprises the assembly of common time and date formats as well
     as turning bit fields into human readable values.
 
-    Measurment records are dicts with the following keys:
+    Measurement records are dicts with the following keys:
 
     Key       | Description
     ----------|-----------------------------------------------
@@ -322,7 +329,7 @@ def process_live_data(rec):
     range     | Measurement range used (40, 400, ... 4000k)
     mode      | normal/Pmin/Pmax/min/max/rel
     hold      | Was hold active? (hold/cont)
-    APO       | Auto-power-off (on/off)
+    apo       | Auto-power-off (on/off)
     power     | Power status (ok/low)
     dispmode  | Active display mode (time/day/sampling/year)
     memload   | No idea what this is (0/1/2). Name may change in the future.
@@ -347,7 +354,7 @@ def process_live_data(rec):
         "range": stat0["range"],
         "mode": stat0["mode"],
         "hold": stat0["hold"],
-        "APO": stat0["APO"],
+        "apo": stat0["apo"],
         "power": stat1["power"],
         "dispmode": stat1["dispmode"],
         "memload": stat1["memload"],
@@ -371,7 +378,7 @@ def live_data2csv(dat, sep, header=True):
         "range",
         "mode",
         "hold",
-        "APO",
+        "apo",
         "power",
         "dispmode",
         "memload",
@@ -437,7 +444,7 @@ def process_saved_data(dat):
     range     | Measurement range used (40, 400, ... 400k)
     mode      | normal/Pmin/Pmax/min/max/rel
     hold      | Was hold active? (hold/cont)
-    APO       | Auto-power-off (on/off)
+    apo       | Auto-power-off (on/off)
     power     | Power status (ok/low)
     dispmode  | Active display mode (time/day/sampling/year)
     memload   | No idea what this is (0/1/2). Name may change in the future.
@@ -475,7 +482,7 @@ def process_saved_data(dat):
             "range": stat0["range"],
             "mode": stat0["mode"],
             "hold": stat0["hold"],
-            "APO": stat0["APO"],
+            "apo": stat0["apo"],
             "power": stat1["power"],
             "dispmode": stat1["dispmode"],
             "memload": stat1["memload"],
@@ -498,7 +505,7 @@ def saved_data2csv(dat, sep, header=True):
         "range",
         "mode",
         "hold",
-        "APO",
+        "apo",
         "power",
         "dispmode",
         "memload",
@@ -573,7 +580,7 @@ def process_logger_data(dat):
     range     | Measurement range used (40, 400, ... 400k)
     mode      | normal/Pmin/Pmax/min/max/rel
     hold      | Was hold active? (hold/cont)
-    APO       | Auto-power-off (on/off)
+    apo       | Auto-power-off (on/off)
 
     """
 
@@ -609,7 +616,7 @@ def process_logger_data(dat):
                 "range": stat0["range"],
                 "mode": stat0["mode"],
                 "hold": stat0["hold"],
-                "APO": stat0["APO"],
+                "apo": stat0["apo"],
             }
 
             logger.append(rec)
@@ -631,7 +638,7 @@ def logger_data2csv(dat, sep, header=True):
         "range",
         "mode",
         "hold",
-        "APO",
+        "apo",
     )
     csv = []
     if header:
@@ -652,7 +659,7 @@ def decode_stat0(byte):
     -------|---------------------------------
     unit   | unit of measurement [lux/fc]
     range  | measurement range [(40, 400, ... 400k)]
-    APO    | Auto-power-off (on/off)
+    apo    | Auto-power-off (on/off)
     mode   | (normal/Pmin/Pmax/max/min/rel
     hold   | hold/cont
     Frange | Factor for decimal point of value
@@ -663,7 +670,7 @@ def decode_stat0(byte):
     """
 
     Stat0 = BitStruct(
-        "APO" / Flag,
+        "apo" / Flag,
         "hold" / Flag,
         "mode" / BitsInteger(3),
         "unit" / Flag,
@@ -688,7 +695,7 @@ def decode_stat0(byte):
 
     ret["unit"] = ("lux", "fc")[ret["unit"]]
     ret["range"] = Range[ret["unit"]][ret["range"]]
-    ret["APO"] = ("on", "off")[ret["APO"]]
+    ret["apo"] = ("on", "off")[ret["apo"]]
     ret["mode"] = mode[ret["mode"]]
     ret["hold"] = ("cont", "hold")[ret["hold"]]
     ret["Frange"] = Frange[ret["range"]]
@@ -753,7 +760,7 @@ Button identifiers are case sensitive:
 Getting status/mode information:
 
     get status
-    get {date|time|unit|range|mode|APO|power|disp|mem|read}
+    get {date|time|unit|range|mode|apo|power|disp|mem|read}
 
 
 Setting modes:
@@ -761,7 +768,7 @@ Setting modes:
     set mode={normal|rel|min|max|pmin|pmax}
     set range={40|400|4k|40k|400k}
     set unit={lux|fc}
-    set APO={on|off}
+    set apo={on|off}
     set disp={time|day|sampling|year}
 
 

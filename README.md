@@ -143,14 +143,14 @@ like this:
     Getting status/mode information:
 
         get status
-        get {date|time|unit|range|mode|APO|power|disp|mem|read}
+        get {date|time|unit|range|mode|apo|power|disp|mem|read}
 
     Setting modes:
 
         set mode={normal|rel|min|max|pmin|pmax}
         set range={40|400|4k|40k|400k}
         set unit={lux|fc}
-        set APO={on|off}
+        set apo={on|off}
         set disp={time|day|sampling|year}
 
     Reading data from the instrument:
@@ -196,7 +196,7 @@ Example session:
     stat1=33, mem_no=99, read_no=1)
     
     >>> pce174.process_live_data(container)
-    {'date': '2007-08-15', 'mode': 'normal', 'APO': 'on', 'unit': 'lux', 
+    {'date': '2007-08-15', 'mode': 'normal', 'apo': 'on', 'unit': 'lux', 
     'rawvalue': 7.9, 'hold': 'cont', 'value': 7.9, 'dispmode': 'time', 
     'power': 'low', 'mem_no': 99, 'read_no': 1, 'range': '400', 'memload': 
     'mem', 'time': '22:24:18'}
@@ -213,7 +213,7 @@ Returns the current status of the instrument. E.g.:
     Units: lux
     Range: 400
     mode:  normal
-    APO:   on
+    apo:   on
     Power: ok
     Disp:  time
     Mem:   None
@@ -230,7 +230,7 @@ This can be used for single readings or automated logging from a computer
 without using the logging feature of the instrument.  By default, the command
 returns comma separated data (CSV) to `STDOUT`.  Example:
 
-    date,time,value,rawvalue,unit,range,mode,hold,APO,power,dispmode,memload,mem_no,read_no
+    date,time,value,rawvalue,unit,range,mode,hold,apo,power,dispmode,memload,mem_no,read_no
     2007-08-15,23:49:58,21.1,21.1,lux,400,normal,cont,on,ok,time,mem,27,12
 
 The first row contains column headers with the following meaning:
@@ -245,7 +245,7 @@ unit      | Unit of measurement (lux/fc)
 range     | Measurement range used (40, 400, ... 4000k)
 mode      | normal/Pmin/Pmax/min/max/rel 
 hold      | Was hold active? (hold/cont)
-APO       | Auto-power-off (on/off)
+apo       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
 memload   | No idea what this is (0/1/2). Name may change in the future.
@@ -283,7 +283,7 @@ This command reads a table of manually saved data from the instrument.
 By default, the command returns comma separated data (CSV) to `STDOUT`.
 Example:
 
-    pos,date,time,value,unit,range,mode,hold,APO,power,dispmode,memload
+    pos,date,time,value,unit,range,mode,hold,apo,power,dispmode,memload
     1,2007-08-15,20:11:34,20.1,lux,400,normal,cont,on,ok,time,1
     2,2007-08-15,20:11:37,4.0,lux,4k,normal,cont,on,ok,time,1
     3,2007-08-15,20:11:40,0,lux,40k,normal,cont,on,ok,time,1
@@ -301,7 +301,7 @@ unit      | Unit of measurement (lux/fc)
 range     | Measurement range used (40, 400, ... 400k)
 mode      | normal/Pmin/Pmax/min/max/rel 
 hold      | Was hold active? (hold/cont)
-APO       | Auto-power-off (on/off)
+apo       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
 memload   | No idea what this is (0/1/2). Name may change in the future.
@@ -315,7 +315,7 @@ This command reads logger data from the instrument.
 By default, the command returns comma separated data (CSV) to `STDOUT`.
 Example:
 
-    groupno,id,date,time,value,unit,range,mode,hold,APO
+    groupno,id,date,time,value,unit,range,mode,hold,apo
     1,0,2007-08-15,20:15:37,110.30000000000001,lux,400,normal,cont,on
     1,1,2007-08-15,20:15:39,110.0,lux,400,normal,cont,on
     1,2,2007-08-15,20:15:41,126.9,lux,400,normal,cont,on
@@ -345,7 +345,7 @@ unit      | Unit of measurement (lux/fc)
 range     | Measurement range used (40, 400, ... 400k)
 mode      | normal/Pmin/Pmax/min/max/rel 
 hold      | Was hold active? (hold/cont)
-APO       | Auto-power-off (on/off)
+apo       | Auto-power-off (on/off)
 
 See get-live-data for details on other formats and weekday handling.
 
