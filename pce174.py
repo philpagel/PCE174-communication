@@ -13,6 +13,7 @@ from collections import OrderedDict
 # others
 import serial
 from construct import * # requires construct ≥ 2.8 (tested with 2.9)
+
 import pdb
 
 __author__ = "Philipp Pagel"
@@ -25,90 +26,144 @@ def main():
 
     args = getargs()
 
-    # Add redundant keys to commandset for conveniance
-    commandset["up"] = commandset["minmax"]
-    commandset["down"] = commandset["hold"]
-    commandset["left"] = commandset["peak"]
-    commandset["right"] = commandset["rel"]
-
-    if args.list:
-        list_commands(commandset)
-        return
-
-    if args.command in commandset:
-        if args.command=="log-live-data":
-            log_live_data(args)
-            return
-        if len(args.file) > 0:
-            if commandset[args.command]["ret"]:
-                infile = open(args.file, "rb")
-                blob = infile.read()
-                infile.close()
-            else:
-                sys.exit(
-                    "Cannot run command '%s' from file - no data expected."
-                    % (args.command)
-                )
-        else:
-            blob = send_command(args.interface, args.command)
-        if commandset[args.command]["ret"]:  # read data
-            if args.format == "raw":
-                sys.stdout.buffer.write(blob)
-            elif args.format == "hex":
-                sys.stdout.buffer.write(binascii.hexlify(blob))
-            elif args.format in ("csv", "repr", "construct"):
-                print(decode_blob(blob, args.command, args.format, args.sep))
+    if args.command=="press":
+        # button presses
+        press_button(args.port, args.args)
+#    elif args.command=="get":
+#        # XXX get status of a variable
+#        getvar(args.args)
+#    elif args.command=="set":
+#        # XXX set status of a variable
+#        setvar(args.args)
+    elif args.command=="read":
+        # Read data from instrument
+        if len(args.args)>1:
+            sys.exit("'read' command takes only 1 argument")
+        dat = read_data(port=args.port, datatype=args.args[0], outformat=args.format, sep=args.sep)
+        sys.stdout.buffer.write(bytes(dat))
+        #print(dat)
+    elif args.command=="log":
+        log_live_data(port=args.port, outformat=args.format, sampleno=args.sampleno, interval=args.samplingint, sep=args.sep)
     else:
-        sys.exit("Unknown command\nTry -h and/or -l for help")
+        sys.exit("Unknown command\nTry -h for help")
 
 
-
-def list_commands(commandset):
-    """Print list of available commands
-    as well as a short description
+def read_data(port, datatype, outformat, sep, fromfile=False, header=False):
     """
+    read data from the instrument and return the results in the specified outformat
 
-    print("Available commands:\n")
-    for key, value in commandset.items():
-        print(" ", key)
-        print(' '*5, value['desc'])
-        print(' '*5, "Button:", value['key'])
-        print()
+    port:       serial port to use or filename
+                typically something like /dev/ttyUSB0 or com1
+                if fromfile==True this is the filenem to read from
+    datatype:   {live|saved|logger}
+                live: current value as displayed
+                saved: manually saved data (registers 1-99)
+                logger: logging session data
+    outformat:  {csv|repr|construct|hex|raw}
+    fromfile:   {True|False}
+                if True, port is interpreted as a file name to read raw data from
+    """
+    
+    cmd = {
+            "live":     0x11,
+            "saved":    0x12,
+            "logger":   0x13
+            }
+
+    if datatype not in cmd.keys():
+        sys.exit("Unknown data type '{}'".format(datatype))
+    else:
+        if fromfile:
+            infile = open(port, "rb")
+            dat = infile.read()
+            infile.close()
+        else:
+            dat = send_cmd(port, cmd[datatype], read=True) 
+        if outformat == "raw":
+            pass
+        elif outformat == "hex":
+            dat = binascii.hexlify(dat)
+        elif outformat in ("csv", "repr", "construct"):
+            dat = decode_blob(dat, datatype, outformat, sep, header=header)
+            dat = str(dat) + "\n"
+            dat = dat.encode("utf-8")
+        else:
+            sys.exit("Unknown format {}".format(outformat))
+    return dat
 
 
-def log_live_data(args):
+def log_live_data(port, outformat, sampleno, interval, sep=","):
     """Log live data (tethered logging)
     """
 
-    if args.sampleno <0:
-        args.sampleno = float('Inf')
+    if sampleno <0:
+        sampleno = float('Inf')
     i = 0
     while True:
-        blob = send_command(args.interface, args.command)
-        if args.format == "raw":
-            sys.stdout.buffer.write(blob)
-        elif args.format == "hex":
-            sys.stdout.buffer.write(binascii.hexlify(blob))
-        elif args.format in ("csv", "repr", "construct"):
-            print(decode_blob(blob, args.command, args.format, args.sep, header=i==0))
+        dat = read_data(port=port, datatype="live", outformat=outformat, sep=sep, header=i==0)
+        sys.stdout.buffer.write(bytes(dat))
+        sys.stdout.flush()
         i += 1
-        if args.sampleno >0:
-            if i >= args.sampleno:
+        if sampleno >0:
+            if i >= sampleno:
                 break
-        time.sleep(args.samplingint)
+        time.sleep(interval)
     return
 
 
 def send_command(port, command):
     """Send a known command to instrument
 
-    port     : string indicating the serial interface to use. E.g. /dev/ttyUSB0
+    port     : string indicating the serial port to use. E.g. /dev/ttyUSB0
     command  : must be one of the valid command strings defined in commandset
 
     returns the binary blob that is received in response or empty byte array
     """
 
     return send_cmd(port, commandset[command]["cmd"], read=commandset[command]["ret"])
+
+
+def press_button(port, button):
+    """Send button press to instrument
+
+    Valid values of button: units, light, load, range, apo, rec, peak, left, rel,
+        right, max, min, up, hold, down, off, REC, PEAK, REL, LOAD, LIGHT
+    
+    lower case button names indicate a short press
+    upper case button names indicate a long press/hold
+    """
+
+    cmd = {
+            'units':    0xfe,
+            'light':    0xfd,
+            'load':     0xfd,
+            'range':    0x7f,
+            'apo':      0x7f,
+            'rec':      0xfb,
+            'peak':     0xf7,
+            'left':     0xf7,
+            'rel':      0xdf,
+            'right':    0xdf,
+            'min':      0xbf,
+            'max':      0xbf,
+            'up':       0xbf,
+            'hold':     0xef,
+            'down':     0xef,
+            'off':      0xf3,
+            'REC':      0xdc,
+            'PEAK':     0xda,
+            'REL':      0xdb,
+            'LOAD':     0xde,
+            'LIGHT':    0xde
+            } 
+
+    if len(button)!=1:
+        sys.exit("'press' expects a single argument, {} found".format(len(button)))
+    
+    button = button[0]
+    if button not in cmd:
+        sys.exit("Unknown button '{}'".format(button))
+    send_cmd(port, cmd[button])
 
 
 def send_cmd(port, cmd, read=False, timeout=0.1):
@@ -129,7 +184,7 @@ def send_cmd(port, cmd, read=False, timeout=0.1):
     )
 
     hello = b"\x87\x83"  # command prefix
-    msg = hello + cmd
+    msg = hello + bytes([cmd])
     iface.write(msg)
 
     blob = b""
@@ -170,22 +225,22 @@ def decode_blob(blob, cmd, outformat, sep, header=True):
     """
 
     ret = None
-    if cmd == "get-status":
+    if cmd == "status":
         ret = parse_live_data(blob)
         ret = process_stat_data(ret)
-    elif cmd in ("get-live-data", 'log-live-data'):
+    elif cmd in ("live", 'log-live-data'):
         ret = parse_live_data(blob)
         if outformat in ("csv", "repr"):
             ret = process_live_data(ret)
         if outformat == ("csv"):
             ret = live_data2csv(ret, sep, header=header)
-    elif cmd == "get-saved-data":
+    elif cmd == "saved":
         ret = parse_saved_data(blob)
         if outformat in ("csv", "repr"):
             ret = process_saved_data(ret)
         if outformat == ("csv"):
             ret = saved_data2csv(ret, sep)
-    elif cmd == "get-logger-data":
+    elif cmd == "logger":
         ret = parse_logger_data(blob)
         if outformat in ("csv", "repr"):
             ret = process_logger_data(ret)
@@ -677,239 +732,56 @@ def decode_stat1(byte):
     return ret
 
 
-
-"""return command definition dict
-
-Actually, an ordered dict of dicts.
-Each inner dict represents a valid command and has the following keys:
-
-cmd     command byte (sent to instrument)
-ret     boolean indicating if any data will be returned by the instrument in response
-key     equivalent key press on the instrument. None if no such key press exists
-desc    brief command description
-"""
-commandset = OrderedDict(
-        [
-            (
-                "units",
-                {
-                    "cmd": b"\xfe",  # command byte
-                    "ret": False,  # will data be returned?
-                    "key": "UNITS",  # Equivalent key press
-                    "desc": "Toggle units between lux and fc",  # description
-                },
-            ),
-            (
-                "light",
-                {
-                    "cmd": b"\xfd",
-                    "ret": False,
-                    "key": "Light/LOAD",
-                    "desc": "Toggle backlight",
-                },
-            ),
-            (
-                "range",
-                {
-                    "cmd": b"\x7f",
-                    "ret": False,
-                    "key": "RANGE/APO",
-                    "desc": "Cycle through measurement ranges",
-                },
-            ),
-            (
-                "save",
-                {
-                    "cmd": b"\xfb",
-                    "ret": False,
-                    "key": "REC/Setup",
-                    "desc": "Save reading to memory",
-                },
-            ),
-            (
-                "peak",
-                {
-                    "cmd": b"\xf7",
-                    "ret": False,
-                    "key": "PEAK/LEFT",
-                    "desc": "Toggle peak value display or next value",
-                },
-            ),
-            (
-                "rel",
-                {
-                    "cmd": b"\xdf",
-                    "ret": False,
-                    "key": "REL/RIGHT",
-                    "desc": "Toggle realtive reading or previous value",
-                },
-            ),
-            (
-                "minmax",
-                {
-                    "cmd": b"\xbf",
-                    "ret": False,
-                    "key": "MAX/MIN/UP",
-                    "desc": "Toggle Min/Max/current value display or increase value",
-                },
-            ),
-            (
-                "hold",
-                {
-                    "cmd": b"\xef",
-                    "ret": False,
-                    "key": "HOLD/DOWN",
-                    "desc": "Toggle hold or decrease value",
-                },
-            ),
-            (
-                "off",
-                {
-                    "cmd": b"\xf3",
-                    "ret": False,
-                    "key": "POWER",
-                    "desc": "Turn off the instrument",
-                },
-            ),
-            (
-                "logging",
-                {
-                    "cmd": b"\xdc",
-                    "ret": False,
-                    "key": "REC-hold",
-                    "desc": "Start/stop data logging",
-                },
-            ),
-            (
-                "prevview",
-                {
-                    "cmd": b"\xda",
-                    "ret": False,
-                    "key": "PEAK-hold",
-                    "desc": "Switch to previous display view mode",
-                },
-            ),
-            (
-                "nextview",
-                {
-                    "cmd": b"\xdb",
-                    "ret": False,
-                    "key": "REL-hold",
-                    "desc": "Switch to next display view mode",
-                },
-            ),
-            (
-                "viewsaved",
-                {
-                    "cmd": b"\xde",
-                    "ret": False,
-                    "key": "LIGHT/LOAD-hold",
-                    "desc": "Toggle view mode for saved data",
-                },
-            ),
-            (
-                "setup",
-                {
-                    "cmd": b"\xfa",
-                    "ret": False,   
-                    "key": "REC+UNITS",
-                    "desc": "Enter/exit setup",
-                },
-            ),
-#            (
-#                "clearval",
-#                {
-#                    "cmd": b"\xee",
-#                    "ret": False,   
-#                    "key": "REC+LOAD",
-#                    "desc": "Clear the manual value storage (does not work!)",
-#                },
-#            ),
-            (
-                "APOon",
-                {
-                    "cmd": b"\x7b",
-                    "ret": False,   
-                    "key": "REC+RANGE",
-                    "desc": "Turn on Auto Power-Off (APO)",
-                },
-            ),
-            (
-                "APOoff",
-                {
-                    "cmd": b"\x7c",
-                    "ret": False,   
-                    "key": "REC+RANGE",
-                    "desc": "Turn off Auto Power-Off (APO)",
-                },
-            ),
-            (
-                "get-status",
-                {
-                    "cmd": b"\x11",
-                    "ret": True,
-                    "key": None,
-                    "desc": "Read status"
-                    },
-            ),
-            (
-                "get-live-data",
-                {
-                    "cmd": b"\x11",
-                    "ret": True,
-                    "key": None,
-                    "desc": "Read live data"
-                    },
-            ),
-            (
-                "log-live-data",
-                {
-                    "cmd": b"\x11",
-                    "ret": True,
-                    "key": None,
-                    "desc": "Log live data. See -I and -n"
-                    },
-            ),
-            (
-                "get-saved-data",
-                {
-                    "cmd": b"\x12",
-                    "ret": True,
-                    "key": None,
-                    "desc": "Read manually saved data (registers 1-99)",
-                },
-            ),
-            (
-                "get-logger-data",
-                {
-                    "cmd": b"\x13", 
-                    "ret": True, 
-                    "key": None, 
-                    "desc": "Read logger data"
-                    },
-            ),
-        ]
-    )
-
-
 def getargs():
     "Return commandline options and arguments"
 
-    parser = argparse.ArgumentParser(description="Talk to a PCE-174 lightmeter/logger")
+    parser = argparse.ArgumentParser(
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description="Talk to a PCE-174 lightmeter/logger",
+            epilog="""Available commands:
+
+Simulating button presses on the instrument:
+
+    press {units|light|load|range|apo|rec|setup|peak|rel|max|min|hold|off|up|down|left|right|}
+    press {REC|PEAK|REL|LOAD}
+
+Button identifiers are case sensitive: 
+    lower case: short press
+    upper case: hold/long press
+
+
+Getting status/mode information:
+
+    get status
+    get {date|time|unit|range|mode|APO|power|disp|mem|read}
+
+
+Setting modes:
+
+    set mode={normal|rel|min|max|pmin|pmax}
+    set range={40|400|4k|40k|400k}
+    set unit={lux|fc}
+    set APO={on|off}
+    set disp={time|day|sampling|year}
+
+
+Reading data from the instrument:
+
+    read {live|saved|logger}
+
+
+Live logging - i.e. repeatedly reading live data:
+
+    log
+"""
+    )
 
     parser.add_argument(
-        "-l",
-        "--list",
-        dest="list",
-        action="store_true",
-        help="list all available commands",
-    )
-    parser.add_argument(
-        "-i",
-        dest="interface",
+        "-p",
+        dest="port",
         type=str,
         default="/dev/ttyUSB0",
-        help="interface to connect to (/dev/ttyUSB0)",
+        help="port to connect to (default:/dev/ttyUSB0)",
     )
     parser.add_argument(
         "-f",
@@ -917,24 +789,24 @@ def getargs():
         type=str,
         default="csv",
         choices=["csv", "repr", "construct", "raw", "hex"],
-        help="specify output format (csv)",
+        help="specify output format for read commands (default:csv)",
     )
     parser.add_argument(
-            '-I',
-            '--samplingint',
-            dest="samplingint",
-            type=int,
-            default=1,
-            help="set sampling interval for tethered logging [s] (1)."
-            )
+        '-i',
+        '--samplingint',
+        dest="samplingint",
+        type=int,
+        default=1,
+        help="set sampling interval for tethered logging [s] (default:1)."
+        )
     parser.add_argument(
-            '-n',
-            '--sampleno',
-            dest="sampleno",
-            type=int,
-            default=-1,
-            help="set number of samples for tethered logging [s] (-1)."
-            )
+        '-n',
+        '--sampleno',
+        dest="sampleno",
+        type=int,
+        default=-1,
+        help="set number of samples for tethered logging [s] (default: -1)."
+        )
     parser.add_argument(
         "-F",
         "--file",
@@ -944,10 +816,13 @@ def getargs():
         help="parse previously saved raw data instead of reading from the instrument",
     )
     parser.add_argument(
-        "-s", "--sep", dest="sep", type=str, default=",", help="separator for csv (',')"
+            "-s", "--sep", dest="sep", type=str, default=",", help="separator for csv (default:',')"
     )
     parser.add_argument(
         "command", nargs="?", type=str, help="command to send to instrument"
+    )
+    parser.add_argument(
+        "args", nargs="*", help="arguments to command"
     )
 
     return parser.parse_args()
