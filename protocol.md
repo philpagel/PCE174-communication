@@ -43,44 +43,44 @@ After that, send a single code byte to run the desired command.  For the most
 part, the commands directly correspond to key presses on the instrument (see
 manual for details):
                             
-Code | binCode      | Command   | Key               | Description
------|--------------|-----------|-------------------|------------------------------------
-0xfe | 0b11111110   | units     | UNITS key         | Toggle units (lux/fc)
-0xfd | 0b11111101   | light     | LIGHT/LOAD key    | Toggle backlight
-0x7f | 0b01111111   | range     | RANGE/APO         | Toggle measurement ranges
-0xfb | 0b11111011   | save      | REC/SETUP         | Save reading to memory
-0xbf | 0b10111111   | minmax    | MAX/MIN/UP        | Toggle min/max/continuous mode
-0xf7 | 0b11110111   | peak      | PEAK/LEFT         | Toggle peak min/max mode
-0xdf | 0b11011111   | rel       | REL/RIGHT         | Toggle rel mode
-0xef | 0b11101111   | hold      | HOLD/DOWN         | Toggle hold mode
-0xde | 0b11011110   | lighthold | LIGHT/LOAD (hold) | Toggle view mode for saved data
-0xdc | 0b11011100   | logger    | REC/SETUP (hold)  | Start/Stop data logging
-0xda | 0b11011010   | peakhold  | PEAK/LEFT (hold)  | Switch to previous display mode
-0xdb | 0b11011011   | relhold   | REL/RIGHT (hold)  | Switch to next display mode 
-0xf3 | 0b11110011   | off       | POWER             | Power off
+Code | Key               | Description
+-----|-------------------|------------------------------------
+0xfe | UNITS key         | Toggle units (lux/fc)
+0xfd | LIGHT/LOAD key    | Toggle backlight
+0x7f | RANGE/APO         | Toggle measurement ranges
+0xfb | REC/SETUP         | Save reading to memory
+0xbf | MAX/MIN/UP        | Toggle min/max/continuous mode
+0xf7 | PEAK/LEFT         | Toggle peak min/max mode
+0xde | REL/RIGHT         | Toggle rel mode
+0xef | HOLD/DOWN         | Toggle hold mode
+0xdb | LIGHT/LOAD (hold) | Toggle view mode for saved data
+0xdc | REC/SETUP (hold)  | Start/Stop data logging
+0xda | PEAK/LEFT (hold)  | Switch to previous display mode
+0xde | REL/RIGHT (hold)  | Switch to next display mode 
+0xf3 | POWER             | Power off
 
 
 Commands not described in manufacturer's protocol documentation but found to do
 something by trial and error:
 
-Code | binCode      | Command   | Key               | Description
------|--------------|-----------|-------------------|------------------------------------
-0xfa | 0b11111010   | setup     | REC+UNITS         | Enter/exit setup
-0xf9 | 0b11111001   |           | REC+RANGE         | APO on
-0x7b | 0b01111011   | APOon     | REC+RANGE         | APO on
-0x7c | 0b01111100   | APOoff    | REC+RANGE         | APO off
-0xee | 0b11101110   |           |                   | memCL shows but memory is not cleared
+Code | Key       | Description
+-----|-----------|------------------------------------
+0xfa | REC+UNITS | Enter/exit setup
+0xf9 | REC+RANGE | APO on
+0x7b | REC+RANGE | APO on
+0x7c | REC+RANGE | APO off
+0xee |           | memCL shows but memory is not cleared
 
 
 Commands that request data from the instrument cannot be triggered by button
 presses:
 
-Code | Command           | Description
------|-------------------|-------------------------------------------------
-0x11 | get-live-data     | Read the current measurement
-0x12 | get-saved-data    | Read manually stored data registers (1-99)
-0x13 | get-logger-data   | Read logger data
-0x14 | –                 | Does not exist although mentioned in original docs
+Code | Description
+-----|-------------------------------------------------
+0x11 | Read the current measurement
+0x12 | Read manually stored data registers (1-99)
+0x13 | Read logger data
+0x14 | Does not exist although mentioned in original docs
 
 After receiving one of these commands, the instrument returns a binary blob
 that requires decoding. The structure of these blobs is described in the next
@@ -108,7 +108,7 @@ Magic number: 0xaadd
 Record format:
 
 Bytes | Content  | Type  | Comment
-------|----------|-------|----------------------
+------|----------|-------|-----------------------------------------
 1     | 0x00     | –     | reserved
 1     | year     | BCD   | date: year, 2 digits
 1     | weekday  | BCD   | date: weekday [1, 7]
@@ -123,13 +123,16 @@ Bytes | Content  | Type  | Comment
 1     | rawvalL  | Uchar | raw value: lower 2 digits
 1     | stat0    | bin   | Status byte 0        
 1     | stat1    | bin   | Status byte 1
-1     | mem_no   | bin   | Number of saved data records
-1     | read_no  | bin   | ?
+1     | mem_no   | bin   | number of saved data records
+1     | read_no  | bin   | manual storage cursor position
 
 In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
 `rawvalue` contains the absolute reading (that would be measured without *rel*
 mode) and `value` is the relative reading as displayed on the screen.
 
+`read_no` indicates where the cursor for viewing saved data is positioned. I.e.
+the memory register which you will see when switching to saved data viewing
+mode by pressing and holding `load`.
 
 ### Manually stored data
 
@@ -283,8 +286,12 @@ Bits  | Meaning       | Values
 5     | power         | 0:ok, 1:low
 4     | sign          | 0:+, 1:-
 3,2   | view          | 00:time, 01:day, 10:sampling-interval, 11:year
-1,0   | memload       | 01:MEM, 10:LOAD
+1,0   | memstat       | 01:store, 10:recall, 11: logging, 00: None
 
 The sign must be multiplied with value, as the value data is always unsigned.
+
+`memstat` indicates if the instrument is in `store` or `recall` mode for saved
+data.  This is the modes you can enter long-pressing the `load` button or
+pressing `rec`, respectively.
 
 

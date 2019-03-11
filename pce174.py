@@ -27,18 +27,22 @@ def main():
     args = getargs()
 
     if args.command=="press":
-        # button presses
-        press_button(args.port, args.args)
+        # press buttons
+        if len(args.args)!=1:
+            sys.exit("'press' expects a single argument, {} found".format(len(button)))
+        press_button(args.port, args.args[0])
     elif args.command=="get":
+        # get status information
         if len(args.args)!=1:
             sys.exit("'get' command takes exactly 1 argument ({} given)".format(len(args.args)))
         print(getvar(args.port, args.args[0]))
     elif args.command=="set":
+        # set things
         if len(args.args)!=2:
             sys.exit("'set' command takes exactly 2 argument ({} given)".format(len(args.args)))
         setvar(args.port, var=args.args[0], value=args.args[1])
     elif args.command=="read":
-        # Read data from instrument
+        # read data from instrument
         if len(args.args)!=1:
             sys.exit("'read' command takes exactly 1 argument ({} given)".format(len(args.args)))
         dat = read_data(port=args.port, datatype=args.args[0], outformat=args.format, sep=args.sep, fromfile=args.file, header=True)
@@ -48,9 +52,58 @@ def main():
         sys.stdout.buffer.write(bytes(dat))
         #print(dat)
     elif args.command=="log":
+        # tethered logging
         log_live_data(port=args.port, outformat=args.format, sampleno=args.sampleno, interval=args.samplingint, sep=args.sep)
+    elif args.command=="setup":
+        # enter/exit setup
+        send_cmd(args.port, 0xfa)
     else:
         sys.exit("Unknown command `{}`\nTry -h for help".format(args.command))
+
+
+def press_button(port, button, n=1):
+    """Send button press to instrument
+
+    Valid values of button: units, light, load, range, apo, rec, peak, left, rel,
+        right, max, min, up, hold, down, off, REC, PEAK, REL, LOAD, LIGHT
+    
+    lower case button names indicate a short press
+    upper case button names indicate a long press/hold
+    """
+
+    cmd = {
+            'units':    0xfe,
+            'light':    0xfd,
+            'load':     0xfd,
+            'range':    0x7f,
+            'apo':      0x7f,
+            'rec':      0xfb,
+            'peak':     0xf7,
+            'left':     0xf7,
+            'rel':      0xdf,
+            'right':    0xdf,
+            'min':      0xbf,
+            'max':      0xbf,
+            'up':       0xbf,
+            'hold':     0xef,
+            'down':     0xef,
+            'off':      0xf3,
+            'REC':      0xdc,
+            'PEAK':     0xda,
+            'LEFT':     0xda,
+            'LOAD':     0xdb,
+            'LIGHT':    0xdb,
+            'REL':      0xde,
+            'RIGHT':    0xde
+            } 
+
+    if button not in cmd:
+        sys.exit("Unknown button '{}'".format(button))
+    
+    for i in range(n):
+        send_cmd(port, cmd[button])
+        if n>1:
+            time.sleep(.25)
 
 
 def getvar(port, var):
@@ -63,14 +116,16 @@ def getvar(port, var):
 
     if var=="status":
         dat = """date:       {date}
+weekday:    {weekday}
 time:       {time}
 unit:       {unit}
 range:      {range}
 mode:       {mode}
+hold:       {hold}
 apo:        {apo}
 power:      {power}
 view:       {view}
-memload:    {memload}
+memstat:    {memstat}
 read_no:    {read_no}""".format_map(dat)
     else:
         if var not in dat.keys():
@@ -79,7 +134,102 @@ read_no:    {read_no}""".format_map(dat)
     return dat
 
 
-def read_data(port, datatype, outformat, sep=",", fromfile="", header=False):
+def setvar(port, var, value):
+    "set variable var to value"
+
+    validvars = {
+            'mode':     ('normal', 'rel', 'min', 'max', 'pmin', 'pmax'), 
+            'hold':     ('cont', 'hold'),
+            'range':    {
+                'lux':  ('400k', '400', '4k', '40k'), 
+                'fc':   ('40k', '40', '400', '4k')
+                },
+            'unit':     ('lux', 'fc'), 
+            'apo':      ('off', 'on'), 
+            'view':     ('time', 'day', 'year', 'sampling')
+            }
+
+    if var in validvars:
+        stat = read_data(port=port, datatype='live')
+        time.sleep(.25)
+        
+        if value==stat[var]:
+            pass # No change of settings necessary
+        elif var == "unit":
+            press_button(port, "units")
+        elif var == "range":
+            if value not in validvars['range'][stat["unit"]]:
+                sys.exit("`{}` is not a valid range for unit `{}`".format(value, stat["unit"]))
+            press_button(port, "range", pressdist(stat["range"], value, validvars["range"][stat["unit"]]))
+            time.sleep(.25)
+        elif var == "mode":
+            if stat["mode"] != "normal":
+                press_button(port, "rel", 2)
+            if value == "rel":
+                press_button(port, "rel", 1)
+            if value == "max":
+                press_button(port, "max", 1)
+            if value == "min":
+                press_button(port, "min", 2)
+            if value == "pmax":
+                press_button(port, "peak", 1)
+            if value == "pmin":
+                press_button(port, "peak", 2)
+        elif var == "hold":
+            press_button(port, "hold")
+        #elif var == "apo":  # XXX does this really work?
+        #    if value == "on":
+        #        send_cmd(port, 0x7b)
+        #    elif value == "off":
+        #        send_cmd(port, 0x7c)
+        elif var == "view":
+            print(stat["view"], value)
+            print ("dist:", pressdist(stat["view"], value, validvars["view"]))
+            press_button(port, "RIGHT", pressdist(stat["view"], value, validvars["view"]))
+            
+        # test success
+        time.sleep(.25)
+        newval = getvar(port, var)
+        if newval != value:
+            sys.exit("Error: Failed to set `{}` to `{}`".format(var, value))
+    else:
+        sys.exit("{} is not a valid argument to `set`".format(var))
+   
+def pressdist(v1, v2, l):
+    "return button press distance between values v1 and v2 in list l"
+
+    p0 = [i for i,x in enumerate(l) if x == v1][0] 
+    p1 = [i for i,x in enumerate(l) if x == v2][0]
+    n = p1-p0
+    if n<0:
+        n+=4
+    return n
+
+
+
+def log_live_data(port, outformat, sampleno, interval, sep=","):
+    """Log live data (tethered logging)
+    """
+
+    if sampleno <0:
+        sampleno = float('Inf')
+    i = 0
+    while True:
+        dat = read_data(port=port, datatype="live", outformat=outformat, sep=sep, header=i==0)
+        dat = str(dat) + "\n"
+        dat = dat.encode("utf-8")
+        sys.stdout.buffer.write(bytes(dat))
+        sys.stdout.flush()
+        i += 1
+        if sampleno >0:
+            if i >= sampleno:
+                break
+        time.sleep(interval)
+    return
+
+
+
+def read_data(port, datatype, outformat="repr", sep=",", fromfile="", header=False):
     """
     read data from the instrument and return the results in the specified outformat
 
@@ -113,95 +263,6 @@ def read_data(port, datatype, outformat, sep=",", fromfile="", header=False):
         dat = decode_blob(dat, datatype, outformat, sep, header=header)
     return dat
 
-
-def setvar(port, var, value):
-    "set variable var to value"
-
-    validvars = {
-            'mode':     ('normal', 'rel', 'min', 'max', 'pmin', 'pmax'), 
-            'range':    {
-                'lux':  ('400k', '400', '4k', '40k'), 
-                'fc':   ('40k', '40', '400', '4k')
-                },
-            'unit':     ('lux', 'fc'), 
-            'apo':      ('on', 'off'), 
-            'view':     ('time', 'day', 'sampling', 'year')
-            }
-
-    if var in validvars:
-        # check validity of value arg
-        curval = getvar(port, var)
-        print ("current value:", curval)
-
-        # press keys to get there
-        # test if reached
-    else:
-        sys.exit("{} is not a valid argument to `set`".format(var))
-   
-
-
-def log_live_data(port, outformat, sampleno, interval, sep=","):
-    """Log live data (tethered logging)
-    """
-
-    if sampleno <0:
-        sampleno = float('Inf')
-    i = 0
-    while True:
-        dat = read_data(port=port, datatype="live", outformat=outformat, sep=sep, header=i==0)
-        dat = str(dat) + "\n"
-        dat = dat.encode("utf-8")
-        sys.stdout.buffer.write(bytes(dat))
-        sys.stdout.flush()
-        i += 1
-        if sampleno >0:
-            if i >= sampleno:
-                break
-        time.sleep(interval)
-    return
-
-
-def press_button(port, button):
-    """Send button press to instrument
-
-    Valid values of button: units, light, load, range, apo, rec, peak, left, rel,
-        right, max, min, up, hold, down, off, REC, PEAK, REL, LOAD, LIGHT
-    
-    lower case button names indicate a short press
-    upper case button names indicate a long press/hold
-    """
-
-    cmd = {
-            'units':    0xfe,
-            'light':    0xfd,
-            'load':     0xfd,
-            'range':    0x7f,
-            'apo':      0x7f,
-            'rec':      0xfb,
-            'peak':     0xf7,
-            'left':     0xf7,
-            'rel':      0xdf,
-            'right':    0xdf,
-            'min':      0xbf,
-            'max':      0xbf,
-            'up':       0xbf,
-            'hold':     0xef,
-            'down':     0xef,
-            'off':      0xf3,
-            'REC':      0xdc,
-            'PEAK':     0xda,
-            'REL':      0xdb,
-            'LOAD':     0xde,
-            'LIGHT':    0xde
-            } 
-
-    if len(button)!=1:
-        sys.exit("'press' expects a single argument, {} found".format(len(button)))
-    
-    button = button[0]
-    if button not in cmd:
-        sys.exit("Unknown button '{}'".format(button))
-    send_cmd(port, cmd[button])
 
 
 def send_cmd(port, cmd, read=False, timeout=0.1):
@@ -360,7 +421,7 @@ def decode_stat0(byte):
 
     ret["unit"] = ("lux", "fc")[ret["unit"]]
     ret["range"] = Range[ret["unit"]][ret["range"]]
-    ret["apo"] = ("on", "off")[ret["apo"]]
+    ret["apo"] = ("off", "on")[ret["apo"]]
     ret["mode"] = mode[ret["mode"]]
     ret["hold"] = ("cont", "hold")[ret["hold"]]
     ret["Frange"] = Frange[ret["range"]]
@@ -372,14 +433,14 @@ def decode_stat1(byte):
     """return a dict from Stat1 byte data
 
     The return value is a dict with decoded information form the bit field and
-    contains the folliwing keys
+    contains the following keys
 
     Key         | Description
     ------------|---------------------------------
     power       | ok/low
     sign        | +1/-1
     displaymode | time/day/sampling-interval/year
-    memload     | MEM/LOAD
+    memstat     | store/recall/logging/None
     """
 
     Stat1 = BitStruct(
@@ -387,19 +448,19 @@ def decode_stat1(byte):
         "power" / Flag,
         "sign" / Flag,
         "view" / BitsInteger(2),
-        "memload" / BitsInteger(2),
+        "memstat" / BitsInteger(2),
     )
 
     ret = Stat1.parse(bytes([byte]))
 
     view = {0b00: "time", 0b01: "day", 0b10: "sampling", 0b11: "year"}
 
-    memload = {0b00: None, 0b01: "mem", 0b10: "load", 0b11: None}
+    memstat = {0b00: None, 0b01: "store", 0b10: "recall", 0b11: 'logging'}
 
     ret["power"] = ("ok", "low")[ret["power"]]
     ret["sign"] = (1, -1)[ret["sign"]]
     ret["view"] = view[ret["view"]]
-    ret["memload"] = memload[ret["memload"]]
+    ret["memstat"] = memstat[ret["memstat"]]
 
     return ret
 
@@ -528,9 +589,9 @@ def process_live_data(rec):
     apo       | Auto-power-off (on/off)
     power     | Power status (ok/low)
     view      | Active view mode (time/day/sampling/year)
-    memload   | No idea what this is (0/1/2). Name may change in the future.
-    mem_no    | Number of manually saved records in memory. (See get-saved-data)
-    read_no   | ?
+    memstat   | store/recall/logging/None
+    mem_no    | Number of manually saved records in memory.
+    read_no   | manual storage cursor position
     """
 
     # bcd decoding
@@ -554,7 +615,7 @@ def process_live_data(rec):
         "apo": stat0["apo"],
         "power": stat1["power"],
         "view": stat1["view"],
-        "memload": stat1["memload"],
+        "memstat": stat1["memstat"],
         "mem_no": rec["mem_no"],
         "read_no": rec["read_no"],
     }
@@ -587,7 +648,7 @@ def process_saved_data(dat):
     apo       | Auto-power-off (on/off)
     power     | Power status (ok/low)
     view      | Active view mode (time/day/sampling/year)
-    memload   | No idea what this is (0/1/2). Name may change in the future.
+    memstat   | store/recall/logging/None
     """
 
     dat2 = []
@@ -624,7 +685,7 @@ def process_saved_data(dat):
             "apo": stat0["apo"],
             "power": stat1["power"],
             "view": stat1["view"],
-            "memload": stat1["memload"],
+            "memstat": stat1["memstat"],
         }
 
         dat2.append(rec)
@@ -715,7 +776,7 @@ def live_data2csv(dat, sep, header=True):
         "apo",
         "power",
         "view",
-        "memload",
+        "memstat",
         "mem_no",
         "read_no",
     )
@@ -744,7 +805,7 @@ def saved_data2csv(dat, sep, header=True):
         "apo",
         "power",
         "view",
-        "memload",
+        "memstat",
     )
     csv = []
     if header:
@@ -802,7 +863,7 @@ Button identifiers are case sensitive:
 Getting status/mode information:
 
     get status
-    get {date|time|unit|range|mode|apo|power|view|memload|read_no}
+    get {date|weekday|time|unit|range|mode|apo|power|view|memstat|read_no}
 
 
 Setting modes:
@@ -812,7 +873,7 @@ Setting modes:
     set range={40|400|4k|40k}        # for fc
     set unit={lux|fc}
     set apo={on|off}
-    set view={time|day|sampling|year}
+    set view={time|day|year|sampling}
 
 Valid `range` values depend on the current value of `unit` and will change
 magically, when the unit is changed. I.e. always set `unit` before `range`.

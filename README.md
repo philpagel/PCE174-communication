@@ -12,13 +12,17 @@ See `protocol.md` for a detailed description of the communication protocol.
 
 ## Status
 
+Compared to v0.6, the command structure has changed and are no longer
+compatible with older releases. I believe it's much cleaner now, but that's
+*my* opinion.
+
 The script can send commands to control the instrument and request data from it:
 
 * Live data: the current reading
 * Saved data: the 99 registers for manually saved values
 * Logging data: entire logging sessions stored in instrument memory
 * Also, tethered logging is supported. I.e. the program keeps requesting
-  live-data from the instrument (`log-live-data`).
+  live-data from the instrument.
 
 All functionality that can be derived from the manufacturer protocol
 documentation has been implemented. It is possible, however, that there are
@@ -32,12 +36,11 @@ Feedback/bug reports are welcome.
 
 Known issues:
 
-* Timing in teathered logging (`log`) is not accurate – in fact, all I did here was to
-  `sleep` for the number of seconds specified in `-I` between samples.  
-* I am not sure what `memload` from the `Stat0` byte does. Once I find
-  out I may change the name to reflect its meaning. I'll leave that to a later
-  release.
-* I have no idea what `read_no` in the live data records is supposed to mean.
+* Sending a `read` command will turn `APO` (auto power off) off. I.e. `get apo`
+  will allways return `off`. This ois probably, why `set apo {on|off}` does not
+  work.
+* Timing in tethered logging (`log`) is not accurate – in fact, all I did here
+  was to `sleep` for the number of seconds specified in `-I` between samples.  
 * In standalone logging mode, the instrument does not honor `rel` mode but
   rather records absolute values. This is kind of inconsistent as the `rel`
   flag *is* recorded. However, tethered logging carried out by this program
@@ -46,11 +49,15 @@ Known issues:
   data processing to fail. You can still use raw, hex or construct format but
   repr and csv do not work in those cases...  This is a bug in the instruments
   firmware – there is nothing I can do about it.
+* The `weekday` recorded by the instrument does not necessarily match the
+  recorded date: `weekday` is a number between 1 and 7 and can be set manually
+  in setup. If you need the true weekday I recommend to compute it from `date`.
 * The instrument encodes many things in BCD. Some BCD values cannot be
   represented exactly in binary representation. E.g. 110.3 turns into
   110.30000000000001.
 * Mysteriously, the `up` and `down` commands do not seem to work in setup mode.
   This implicates, that you cannot `set` `date`, `time` or `sampling`
+
 
 ## Credits
 
@@ -59,9 +66,13 @@ changes to code and documentation.
 
 ## Compatibility
 
+This program has been successfully tested with both a PCE-174 and Extech HD450
+light meter unter Linux.
+
 The program was developed under Linux but it *should* work under Windows and
 MacOS as well.  However this is untested. Please let me know if you have tried
 this and I'll at least update this statement.
+
 
 ## Connecting to a computer
 
@@ -73,7 +84,6 @@ may need to install the respective driver (from the web or the Windows
 software CD that comes with the instrument). Mac anyone?
 
 Serial communication parameters are `9600bps8N1`.
-
 
 ## Dependencies
 
@@ -142,7 +152,7 @@ like this:
     Getting status/mode information:
 
         get status
-        get {date|time|unit|range|mode|apo|power|view|memload|read_no}
+        get {date|time|unit|range|mode|apo|power|view|memstat|read_no}
 
     Setting modes:
 
@@ -178,65 +188,125 @@ instrument.
 
 Example session:
 
-    >>> import pce174
-    
-    >>> pce174.send_command('/dev/ttyUSB0', 'light')
-    
-    >>> dat = pce174.send_command('/dev/ttyUSB0', 'get-live-data')
-    
+    >>> import pce174 as p
+    >>> p.press_button("/dev/ttyUSB0", "light")
+    >>> dat = p.read_data("/dev/ttyUSB0", "live")
     >>> dat
-    b'\xaa\xdd\x00\x07\x02\x08\x15"$\x18\x00O\x00O\x01!c\x01\x02'
-    
-    >>> container = pce174.parse_live_data(dat)
-    
-    >>> container
-    Container(magic=b'\xaa\xdd', year=7, weekday=2, month=8, day=21, hour=34, 
-    minute=36, second=24, dat0H=0, dat0L=79, dat1H=0, dat1L=79, stat0=1, 
-    stat1=33, mem_no=99, read_no=1)
-    
-    >>> pce174.process_live_data(container)
-    {'date': '2007-08-15', 'mode': 'normal', 'apo': 'on', 'unit': 'lux', 
-    'rawvalue': 7.9, 'hold': 'cont', 'value': 7.9, 'view': 'time', 
-    'power': 'low', 'mem_no': 99, 'read_no': 1, 'range': '400', 'memload': 
-    'mem', 'time': '22:24:18'}
+    {'weekday': 1, 'date': '2019-03-11', 'value': 37.6, 'rawvalue': 37.6, 'memstat': None, 'read_no': 1, 'time': '21:43:50', 'hold': 'cont', 'mem_no': 11, 'unit': 'lux', 'view': 'time', 'range': '400', 'mode': 'normal', 'power': 'ok', 'apo': 'off'}
+    dat = p.read_data("/dev/ttyUSB0", "saved")
+    >>> p.getvar("/dev/ttyUSB0", "unit")
+    'lux'
+    >>> p.setvar("/dev/ttyUSB0", "unit", "fc")
+    >>> p.read_data("/dev/ttyUSB0", "live", outformat="csv")
+    '2019-03-11,1,21:47:38,3.5,3.5,fc,40,normal,cont,off,ok,time,None,11,1'
+    >>> dat2 = p.read_data("/dev/ttyUSB0", "saved")
+    >>> dat3 = p.read_data("/dev/ttyUSB0", "logger")
 
 See pydoc and/or source code for function documentation.
 
 
-## get-status
+## Simulate button presses
 
-Returns the current status of the instrument. E.g.:
+You can generate button press events over usb using the `press` command:
+    
+    > pce174.py press rel
 
+Essentially. all buttons of the instrument are supported: `units`, `light`,
+`load`, `range`, `apo`, `rec`, `setup`, `peak`, `rel`, `max`, `min`, `hold`,
+`off`, `up`, `down`, `left`, `right`.
+
+Som buttons have special functions when pressed long (hold). These events can
+be triggered by using the all upper case version of the buttons: `REC`, `PEAK`,
+`REL`, `LOAD`
+
+See instrument manual for what these buttons do.
+
+## Getting status information
+
+In order to get the value of instrument parameters use the `get` command. The
+following paramters are supported: `date`, `weekday`, `time`, `unit`, `range`,
+`mode`, `apo`, `power`, `view`, `memstat`, `read_no`. E.g.:
+
+    > pce174.py get unit
+    lux
+
+In addition, you can request the `status` which shows all of the above in human
+readable form:
+
+    > pce174.py get status
     date:       2019-03-10
     time:       15:55:40
     unit:       lux
     range:      400
     mode:       normal
-    apo:        on
+    apo:        off
     power:      ok
     view:       time
-    memload:    None
+    memstat:    None
     read_no:    1
 
-All of the above is also included in the data returned by `get-live-data` but
-if all you want is checking status, this command is more conveniant.
+All of the above is also included in the data returned by but if all you want
+is checking status, this command is more conveniant.
 
 
-## read live
+## Setting parameters
+
+You can set parameters like `rel` or `peak` py presing the respective buttons
+on the instrument and by emulating button presses as describe above but this is
+suboptimal in a scripted environment, because you need to knwo the current
+state and then press the right buttons the correct number of times. To ease the
+process of setting things to the desired value the program can do this for you
+and firgure out the details by itself.
+
+To set unit and range use the following commands:
+
+    set unit={lux|fc}
+    set range={400|4k|40k|400k}      # for lux
+    set range={40|400|4k|40k}        # for fc
+
+As the valid arguments to `range` depend on `unit` it is wise to set unit first.
+In addition you can set the measurement mode with
+
+    set mode={normal|rel|min|max|pmin|pmax}
+
+To set the desired view mode (what you see on the instrument display) use:
+
+    set view={time|day|year|sampling}
+
+In theory, you can set turn `apo` on and of with
+
+    set apo={on|off}
+
+However, this does not work, yet...
+
+
+## Reading data from the instrument
+
+The program supports all three different types of data storede in the instrument:
+
+1. Live data (`read live`)– i.e. the current reading
+2. Saved data (`read saved`)– i.e. the content of the 99 storage registers that on can manually strore readings in
+3. Logger data (`read logger`)– i.e. all stand-alone logging sessions
+
+In addition, you can perform tethered logging – i.e. the porgram polls the live data repeatedly (`log`).
+
+### read live
 
 This command reads live data from the instrument. I.e. the current readings.
 This can be used for single readings or automated logging from a computer
 without using the logging feature of the instrument.  By default, the command
 returns comma separated data (CSV) to `STDOUT`.  Example:
 
-    date,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memload,mem_no,read_no
-    2007-08-15,23:49:58,21.1,21.1,lux,400,normal,cont,on,ok,time,mem,27,12
+    > pce174.py read live
+    date,weekday,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memstat,mem_no,read_no
+    2019-03-10,7,17:18:32,14.600000000000001,14.600000000000001,lux,400,rel,cont,off,ok,sampling,None,6,1
 
 The first row contains column headers with the following meaning:
 
 Column    | Description
-----------|-----------------------------------------------
+----------|-----------------------------------------------------
 date      | Date in ISO-8601 format (YYYY-MM-DD)
+weekday   | int (1-7) caution: does not necessarily match date
 time      | Time (HH:MM:SS)
 value     | Numerical value of reading
 rawvalue  | raw numerical value 
@@ -247,9 +317,9 @@ hold      | Was hold active? (hold/cont)
 apo       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
-memload   | No idea what this is (0/1/2). Name may change in the future.
+memstat   | manual stroing/viewing of data (None/store/recall)
 mem_no    | Number of manually saved records in memory. (See get-saved-data)
-read_no   | ?
+read_no   | Manual storage cursor position (in the 99 storage registers)
 
 In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
 `rawvalue` contains the absolute reading (that would be measured without *rel*
@@ -261,7 +331,7 @@ does not try to ensure that the weekday entry matches the date. If you need the
 weekday, don;t trust this data and compute it from the date.
 
 
-## log
+### log
 
 This command calls `read live` repeatedly to do tethered live logging. By
 default it will log every second until interrupted. You can set the logging
@@ -269,29 +339,40 @@ interval with the `-I` option and limit the number of readings with `-n`.
 Negative values of `-n` / `--sampleno` mean that the program will keep logging
 until interrupted.
 
+    > pce174.py log
+    date,weekday,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memstat,mem_no,read_no
+    2019-03-10,7,17:18:06,15.200000000000001,15.200000000000001,lux,400,rel,cont,off,ok,sampling,None,6,1
+    2019-03-10,7,17:18:07,18.3,18.3,lux,400,rel,cont,off,ok,sampling,None,6,1
+    2019-03-10,7,17:18:08,18.5,18.5,lux,400,rel,cont,off,ok,sampling,None,6,1
+    2019-03-10,7,17:18:10,18.5,18.5,lux,400,rel,cont,off,ok,sampling,None,6,1
+
 As for `read live`, the first row contains the column headers in csv
 format. All other formats are simply written to `STDOUT` without any record
 separators.
 
 
-## read saved
+### read saved
 
 This command reads a table of manually saved data from the instrument.
 By default, the command returns comma separated data (CSV) to `STDOUT`.
 Example:
 
-    pos,date,time,value,unit,range,mode,hold,apo,power,dispmode,memload
-    1,2007-08-15,20:11:34,20.1,lux,400,normal,cont,on,ok,time,1
-    2,2007-08-15,20:11:37,4.0,lux,4k,normal,cont,on,ok,time,1
-    3,2007-08-15,20:11:40,0,lux,40k,normal,cont,on,ok,time,1
-    4,2007-08-15,20:11:43,0,lux,400k,normal,cont,on,ok,time,1
+    > pce174.py read saved
+    pos,date,weekday,time,value,unit,range,mode,hold,apo,power,view,memstat
+    1,2019-03-04,1,15:00:57,0.0,lux,4k,max,cont,off,ok,time,mem
+    2,2019-03-04,1,15:56:58,0.0,lux,400,normal,cont,off,ok,time,mem
+    3,2019-03-04,1,15:56:59,0.0,lux,400,normal,cont,off,ok,time,mem
+    4,2019-03-10,7,13:45:39,0.0,lux,400,normal,cont,off,ok,time,mem
+    5,2019-03-10,7,13:45:42,0.0,lux,400,normal,cont,off,ok,time,mem
+    6,2019-03-10,7,13:45:46,0.0,lux,400,normal,cont,off,ok,time,mem
 
 The first row contains column headers with the following meaning:
 
 Column    | Description
-----------|-----------------------------------------------
+----------|----------------------------------------------------
 pos       | Number of the storage position
 date      | Date in ISO-8601 format (YYYY-MM-DD)
+weekday   | int (1-7) caution: does not necessarily match date
 time      | Time (HH:MM:SS)
 value     | Numerical value
 unit      | Unit of measurement (lux/fc)
@@ -301,41 +382,35 @@ hold      | Was hold active? (hold/cont)
 apo       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
-memload   | No idea what this is (0/1/2). Name may change in the future.
+memstat   | manual stroing/viewing of data (None/store/recall)
 
 See get-live-data for details on other formats and weekday handling.
 
 
-## read logger
+### read logger
 
 This command reads logger data from the instrument.
 By default, the command returns comma separated data (CSV) to `STDOUT`.
 Example:
 
-    groupno,id,date,time,value,unit,range,mode,hold,apo
-    1,0,2007-08-15,20:15:37,110.30000000000001,lux,400,normal,cont,on
-    1,1,2007-08-15,20:15:39,110.0,lux,400,normal,cont,on
-    1,2,2007-08-15,20:15:41,126.9,lux,400,normal,cont,on
-    1,3,2007-08-15,20:15:43,96.30000000000001,lux,400,normal,cont,on
-    2,0,2007-08-15,20:20:16,67.9,lux,400,normal,cont,on
-    2,1,2007-08-15,20:20:18,66.60000000000001,lux,400,normal,cont,on
-    2,2,2007-08-15,20:20:20,66.2,lux,400,normal,cont,on
-    2,3,2007-08-15,20:20:22,76.9,lux,400,normal,cont,on
-    2,4,2007-08-15,20:20:24,108.10000000000001,lux,400,normal,cont,on
-    2,5,2007-08-15,20:20:26,108.0,lux,400,normal,cont,on
-    2,6,2007-08-15,20:20:28,107.7,lux,400,normal,cont,on
-    3,0,2007-08-15,20:12:15,38.0,lux,400,normal,cont,on
-    3,1,2007-08-15,20:12:17,37.800000000000004,lux,400,normal,cont,on
-    3,2,2007-08-15,20:12:19,54.1,lux,400,normal,cont,on
-
+    > pce174.py read logger
+    groupno,id,date,weekday,time,value,unit,range,mode,hold,apo
+    1,0,2019-03-10,7,17:22:00,8.700000000000001,lux,400,normal,cont,off
+    1,1,2019-03-10,7,17:22:02,8.4,lux,400,normal,cont,off
+    1,2,2019-03-10,7,17:22:04,8.4,lux,400,normal,cont,off
+    1,3,2019-03-10,7,17:22:06,8.200000000000001,lux,400,normal,cont,off
+    2,0,2019-03-10,7,17:22:35,9.0,lux,400,normal,cont,off
+    2,1,2019-03-10,7,17:22:37,8.9,lux,400,normal,cont,off
+    2,2,2019-03-10,7,17:22:39,8.700000000000001,lux,400,normal,cont,off
 
 The first row contains column headers with the following meaning:
 
 Column    | Description
-----------|-----------------------------------------------
+----------|-----------------------------------------------------
 groupno   | numerical id of the logging group [1, 2, ...]
 id        | measurement number within the group [0, 1, ...]
 date      | YYYY-MM-DD
+weekday   | int (1-7) caution: does not necessarily match date
 time      | HH:MM:SS
 value     | measurement
 unit      | Unit of measurement (lux/fc)
@@ -391,9 +466,7 @@ Similar to raw but transcribed to hex representation.
 If you write raw data blobs into a file you can later parse it:
 
     pce174.py read saved -f raw > foo.dat
-    
     pce174.py read saved -F foo.dat
-
     pce174.py read saved -F foo.dat -f repr
 
 This may be useful, if you are not sure if you want the data in different
@@ -402,6 +475,9 @@ reproduce the problem based on actual raw data.
 
 **Caution:** this only works with raw data! If you forget to specify `-f raw`
 you will not be able to read it later.
+
+As the different data types have incompatible formats you must use the correct
+argument to `read`.
 
 
 # Some useful things from the manual
