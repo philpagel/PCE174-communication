@@ -250,10 +250,10 @@ This seems like a really bad idea, as we may run into the magic number by
 chance when a value is measured that happens to match the magic number.
 However, this is actually safe:
 
-The larget value `valH` and `valL` can take is 99 because they represent the
-upper and lower 2 decimal digits of a number, respectively. So the largest
-possible value is 9999 = 0x270f. So the magic number 0xaa56 is not a valid
-measurement value and cannot be encountered.
+The largest value `valH` and `valL` can take is 99 because they represent the
+upper and lower 2 decimal digits of a number, respectively. The largest
+possible value is 9999 = 0x6363 in this representation. So the magic number
+0xaa56 is not a valid measurement value and cannot be encountered.
 
 
 #### Logging data record
