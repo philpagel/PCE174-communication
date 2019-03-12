@@ -868,15 +868,19 @@ Getting status/mode information:
 
 Setting modes:
 
-    set mode={normal|rel|min|max|pmin|pmax}
-    set range={400|4k|40k|400k}      # for lux
-    set range={40|400|4k|40k}        # for fc
-    set unit={lux|fc}
-    set apo={on|off}
-    set view={time|day|year|sampling}
+    set mode {normal|rel|min|max|pmin|pmax}
+    set range {400|4k|40k|400k}      # for lux
+    set range {40|400|4k|40k}        # for fc
+    set unit {lux|fc}
+    set apo {on|off}
+    set view {time|day|year|sampling}
 
 Valid `range` values depend on the current value of `unit` and will change
 magically, when the unit is changed. I.e. always set `unit` before `range`.
+
+Enter/exit setup mode
+    
+    setup
 
 Reading data from the instrument:
 

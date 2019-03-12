@@ -156,11 +156,15 @@ like this:
 
     Setting modes:
 
-        set mode={normal|rel|min|max|pmin|pmax}
-        set range={40|400|4k|40k|400k}
-        set unit={lux|fc}
-        set apo={on|off}
-        set view={time|day|sampling|year}
+        set mode {normal|rel|min|max|pmin|pmax}
+        set range {40|400|4k|40k|400k}
+        set unit {lux|fc}
+        set apo {on|off}
+        set view {time|day|sampling|year}
+
+    Enter/exit setup mode
+    
+        setup
 
     Reading data from the instrument:
 
@@ -211,12 +215,12 @@ You can generate button press events over usb using the `press` command:
     
     > pce174.py press rel
 
-Essentially. all buttons of the instrument are supported: `units`, `light`,
+Essentially, all buttons of the instrument are supported: `units`, `light`,
 `load`, `range`, `apo`, `rec`, `setup`, `peak`, `rel`, `max`, `min`, `hold`,
 `off`, `up`, `down`, `left`, `right`.
 
-Som buttons have special functions when pressed long (hold). These events can
-be triggered by using the all upper case version of the buttons: `REC`, `PEAK`,
+Some buttons have special functions when pressed long (hold). These events can
+be triggered by using the upper case version of the buttons: `REC`, `PEAK`,
 `REL`, `LOAD`
 
 See instrument manual for what these buttons do.
@@ -224,7 +228,7 @@ See instrument manual for what these buttons do.
 ## Getting status information
 
 In order to get the value of instrument parameters use the `get` command. The
-following paramters are supported: `date`, `weekday`, `time`, `unit`, `range`,
+following parameters are supported: `date`, `weekday`, `time`, `unit`, `range`,
 `mode`, `apo`, `power`, `view`, `memstat`, `read_no`. E.g.:
 
     > pce174.py get unit
@@ -245,33 +249,33 @@ readable form:
     memstat:    None
     read_no:    1
 
-All of the above is also included in the data returned by but if all you want
-is checking status, this command is more conveniant.
+All of the above is also included in the data returned by `read live` but if
+all you want is checking status, this command is more convenient.
 
 
 ## Setting parameters
 
-You can set parameters like `rel` or `peak` py presing the respective buttons
-on the instrument and by emulating button presses as describe above but this is
-suboptimal in a scripted environment, because you need to knwo the current
+You can set parameters like `rel` or `peak` by pressing the respective buttons
+on the instrument and by emulating button presses as described above but this is
+suboptimal in a scripted environment, because you need to know the current
 state and then press the right buttons the correct number of times. To ease the
 process of setting things to the desired value the program can do this for you
-and firgure out the details by itself.
+and figure out the details by itself.
 
 To set unit and range use the following commands:
 
-    set unit={lux|fc}
-    set range={400|4k|40k|400k}      # for lux
-    set range={40|400|4k|40k}        # for fc
+    set unit {lux|fc}
+    set range {400|4k|40k|400k}      # valid ranges for lux
+    set range {40|400|4k|40k}        # valid ranges for fc
 
-As the valid arguments to `range` depend on `unit` it is wise to set unit first.
+As the valid arguments to `range` depend on `unit` it is wise to set `unit` first.
 In addition you can set the measurement mode with
 
-    set mode={normal|rel|min|max|pmin|pmax}
+    set mode {normal|rel|min|max|pmin|pmax}
 
 To set the desired view mode (what you see on the instrument display) use:
 
-    set view={time|day|year|sampling}
+    set view {time|day|year|sampling}
 
 In theory, you can set turn `apo` on and of with
 
@@ -282,13 +286,13 @@ However, this does not work, yet...
 
 ## Reading data from the instrument
 
-The program supports all three different types of data storede in the instrument:
+The program supports all three different types of data stored in the instrument:
 
 1. Live data (`read live`)– i.e. the current reading
-2. Saved data (`read saved`)– i.e. the content of the 99 storage registers that on can manually strore readings in
+2. Saved data (`read saved`)– i.e. the content of the 99 storage registers that on can manually store readings in
 3. Logger data (`read logger`)– i.e. all stand-alone logging sessions
 
-In addition, you can perform tethered logging – i.e. the porgram polls the live data repeatedly (`log`).
+In addition, you can perform tethered logging – i.e. the program polls the live data repeatedly (`log`).
 
 ### read live
 
@@ -317,8 +321,8 @@ hold      | Was hold active? (hold/cont)
 apo       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
-memstat   | manual stroing/viewing of data (None/store/recall)
-mem_no    | Number of manually saved records in memory. (See get-saved-data)
+memstat   | storing/viewing of data (None/store/recall)
+mem_no    | Number of manually saved records in memory. (See `read saved`)
 read_no   | Manual storage cursor position (in the 99 storage registers)
 
 In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
@@ -382,9 +386,9 @@ hold      | Was hold active? (hold/cont)
 apo       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
-memstat   | manual stroing/viewing of data (None/store/recall)
+memstat   | storing/viewing of data (None/store/recall)
 
-See get-live-data for details on other formats and weekday handling.
+See `read live` for details on other formats and weekday handling.
 
 
 ### read logger
@@ -419,13 +423,13 @@ mode      | normal/Pmin/Pmax/min/max/rel
 hold      | Was hold active? (hold/cont)
 apo       | Auto-power-off (on/off)
 
-See get-live-data for details on other formats and weekday handling.
+See `read live` for details on other formats and weekday handling.
 
 
 ## Data formats
 
 Through the -f option you can choose from several output formats for the
-`get-XXX-data` functions:
+`read XXX` functions.
 
 ### csv
 
