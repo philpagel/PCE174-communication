@@ -100,7 +100,7 @@ structure returned by `0x13` so is most likely an error in the original docs.
 Data blobs always start with a 2 byte magic number that indicates
 the type of blob. The actual data follows immediately after that. 
 
-Most numerical data is encoded as binary coded decimal (BCD), i.e bytes are
+Most numerical data is encoded as binary coded decimal (BCD), i.e. bytes are
 interpreted as two separate 4 bit nibbles which encode decimal digits (0-9). 
 
 ### Live data
@@ -181,7 +181,7 @@ Byte | Size |  Content  | Type  | Comment
 12   | 1    |  stat1    | bin   | Status byte 1
 
 
-The data value uses a variety of BCD on byte level. valH and valL are not BCD
+The data value uses a variety of BCD on byte level. `valH` and `valL` are not BCD
 encoded, themselves.
 
     value = Stat0_sign * (100 * valH + valL) * Frange
@@ -248,8 +248,12 @@ the next magic number for a logging group or EOF.
 
 This seems like a really bad idea, as we may run into the magic number by
 chance when a value is measured that happens to match the magic number.
-However, this is actually safe, as the magic number is larger than the largest
-possible measurement and thus cannot be encountered by chance.
+However, this is actually safe:
+
+The larget value `valH` and `valL` can take is 99 because they represent the
+upper and lower 2 decimal digits of a number, respectively. So the largest
+possible value is 9999 = 0x270f. So the magic number 0xaa56 is not a valid
+measurement value and cannot be encountered.
 
 
 #### Logging data record

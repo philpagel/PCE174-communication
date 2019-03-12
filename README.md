@@ -26,9 +26,9 @@ The script can send commands to control the instrument and request data from it:
 
 All functionality that can be derived from the manufacturer protocol
 documentation has been implemented. It is possible, however, that there are
-undocumented functions.
+undocumented functions that I haven't found.
 
-I have tested all commands ad they seem to do what I intended. However I did
+I have tested all commands and they seem to do what I intended. However, I did
 not systematically test invalid input. I also didn't implement any error
 handling so you will be presented with Python's error traceback when something
 goes wrong.
@@ -61,12 +61,12 @@ Firmware/instrument issues
   flag *is* recorded. However, tethered logging carried out by this program
   does treat `rel` mode as expected – so don't confuse the two.
 * Sometimes the instrument stores invalid data like seconds >59. This causes
-  data processing to fail. You can still use raw, hex or construct format but
-  repr and csv do not work in those cases...  This is a bug in the instruments
-  firmware – there is nothing I can do about it.
+  data processing to fail. You can still use `raw`, `hex` or `construct` format
+  but `repr` and `csv` do not work in those cases...  This is a bug in the
+  instruments firmware – there is nothing I can do about it.
 * The `weekday` recorded by the instrument does not necessarily match the
   recorded date: `weekday` is a number between 1 and 7 and can be set manually
-  in setup. If you need the true weekday I recommend to compute it from `date`.
+  in setup. If you need the true weekday I recommend computing it from `date`.
 
 
 ## Credits
@@ -80,7 +80,7 @@ This program has been successfully tested with both a PCE-174 and Extech HD450
 light meter unter Linux.
 
 The program was developed under Linux but it *should* work under Windows and
-MacOS as well.  However this is untested. Please let me know if you have tried
+MacOS as well.  However, this is untested. Please let me know if you have tried
 this and I'll at least update this statement.
 
 
@@ -260,7 +260,7 @@ To set unit and range use the following commands:
     set range {40|400|4k|40k}        # valid ranges for fc
 
 As the valid arguments to `range` depend on `unit` it is wise to set `unit` first.
-In addition you can set the measurement mode with
+In addition, you can set the measurement mode with
 
     set mode {normal|rel|min|max|pmin|pmax}
 
@@ -283,22 +283,21 @@ instrument:
 
 1. Live data (`read live`) – i.e. the current reading
 2. Saved data (`read saved`) – i.e. the content of the 99 storage registers
-   that on can manually store readings in
+   that one can manually store readings in
 3. Logger data (`read logger`) – i.e. all stand-alone logging sessions
 
-In addition, you can perform tethered logging – i.e. the program polls the live
+In addition, you can perform tethered logging – i.e. the program polls live
 data repeatedly (`log`).
 
 ### read live
 
 This command reads live data from the instrument. I.e. the current readings.
-This can be used for single readings or automated logging from a computer
-without using the logging feature of the instrument.  By default, the command
-returns comma separated data (CSV) to `STDOUT`.  Example:
+By default, the command returns comma separated data (CSV) to `STDOUT`.
+Example:
 
     > pce174.py read live
     date,weekday,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memstat,mem_no,read_no
-    2019-03-10,7,17:18:32,14.600000000000001,14.600000000000001,lux,400,rel,cont,off,ok,sampling,None,6,1
+    2019-03-10,7,17:18:32,14.600000000000001,14.600000000000001,lux,400,normal,cont,off,ok,sampling,None,6,1
 
 The first row contains column headers with the following meaning:
 
@@ -327,7 +326,7 @@ mode) and `value` is the relative reading as displayed on the screen.
 The binary data from the instrument includes a numeric `weekday` field in the
 data which has a few issues: `weekday` is manually set – i.e. the instrument
 does not try to ensure that the weekday entry matches the date. If you need the 
-weekday, don't trust this data and compute it from the date.
+weekday, better compute it from the date.
 
 
 ### log
@@ -439,14 +438,13 @@ The field separator is a comma (`','`), by default and can be chosen with the
 This format is the Python representation of the data. It is mostly useful for
 debugging and possibly for use in other python programs although in the latter
 case it's probably better to import the script as a module and use the data
-directly as it is returned from the `parse-XXX-data` or `process-XXX-data`
-functions of the module.
+returned from the `read_data` function. See below for details.
 
 
 ### construct
 
-This is the container representation of the construct library. For
-debugging, only.
+This is the container representation of the construct library. Probably only
+useful for debugging.
 
 
 ### raw
@@ -469,7 +467,7 @@ If you write raw data blobs into a file you can later parse it:
     pce174.py read saved -F foo.dat -f repr
 
 This may be useful, if you are not sure if you want the data in different
-formats, later or for debugging.  Also it may help for bug reports in order to
+formats, later or for debugging.  Also, it may help for bug reports in order to
 reproduce the problem based on actual raw data.
 
 **Caution:** this only works with raw data! If you forget to specify `-f raw`
@@ -477,6 +475,17 @@ you will not be able to read it later.
 
 As the different data types have incompatible formats you must use the correct
 argument to `read`.
+
+
+# Entering setup
+
+To enter or exit setup mode use
+    
+    pce174.py setup
+
+This is not all that usefull as I haven't figured out how to make the `up` and
+`down` button press commands work in this mode. So you have to do the actual
+setup using the buttons on the instrument.
 
 
 # Usage as a module
@@ -492,7 +501,6 @@ Example session:
     >>> dat = p.read_data("/dev/ttyUSB0", "live")
     >>> dat
     {'weekday': 1, 'date': '2019-03-11', 'value': 37.6, 'rawvalue': 37.6, 'memstat': None, 'read_no': 1, 'time': '21:43:50', 'hold': 'cont', 'mem_no': 11, 'unit': 'lux', 'view': 'time', 'range': '400', 'mode': 'normal', 'power': 'ok', 'apo': 'off'}
-    dat = p.read_data("/dev/ttyUSB0", "saved")
     >>> p.getvar("/dev/ttyUSB0", "unit")
     'lux'
     >>> p.setvar("/dev/ttyUSB0", "unit", "fc")
@@ -508,7 +516,7 @@ See pydoc and/or source code for function documentation.
 
 Press `REC + UNITS` to enter setup.
 
-Peak min/max mode is able to detect short high/low peaks with a 10ms
+Pulse min/max mode is able to detect short high/low peaks with a 10ms
 resolution.  Normal min/max mode is much slower than that.
 
 
