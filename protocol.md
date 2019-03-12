@@ -154,10 +154,10 @@ bytes are all `0x00`.
 Byte | Size | Content  | Type  | Comment
 -----|------|----------|-------|-----------------------
 0    | 2    | 0xbb88   | –     | magic number
-14   | 13   |          |       | data record 1
-27   | 13   |          |       | data record 2
-30   | 13   |          |       | data record 3
-...
+2    | 13   |          |       | data record 1
+15   | 13   |          |       | data record 2
+18   | 13   |          |       | data record 3
+...  |      |          |       |
      | 13   |          |       | data record n (n<100)
      | x    | 0x00     |       | trailing zero bytes
 
@@ -208,8 +208,8 @@ program.
 
 Command: `0x13`
 
-Returns a nested data structure comprising a header follwoed by one logging group
-records that contain logging data records.
+Returns a nested data structure comprising a header followed by one or more
+logging group records that contain logging data records.
 
 #### Header
 
@@ -252,7 +252,7 @@ However, this is actually safe, as the magic number is larger than the largest
 possible measurement and thus cannot be encountered by chance.
 
 
-#### logging data record
+#### Logging data record
 
 Byte | Size  |  Content  | Type  | Comment
 ---- |-------|-----------|-------|------------------------
