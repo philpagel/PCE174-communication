@@ -1,20 +1,20 @@
 # PCE-174 light meter protocol description
 
-The light meter uses a binary protocol over the serial connection. Therefore,
+The light meter uses a binary protocol over a serial connection. Therefore,
 talking to it manually through a terminal program is not fun.
 
-The protocol documentation and implementation started from a chinglish piece of
-documentation that I got my hands on. As it turns out, the documentation is
-sketchy and partially incorrect, so quite a bit of reverse engineering went
-into this, too.
+The protocol documentation and implementation started from 3 pages of chinglish
+documentation that PCE was kind enough to send to me (Thanks a lot for that!).
+As it turns out, the documentation is sketchy and partially incorrect, so quite
+a bit of reverse engineering went into this, too.
 
 I'd provide the original documentation here but don't feel like getting sued for
 copyright violations. So if you want it ask nicely and PCE or Extech may send
 it to you, too.
 
-*Caution:* This is still work in process and I am updating this document and
-the script as I learn. So don't complain if it wrecks your car, explodes your
-house or harms a kitten.
+*Caution:* This represents my current knowledge – or what I believe I know. No
+warranty, so don't complain if it wrecks your car, explodes your house or harms
+a kitten.
 
 
 ## Sending commands
@@ -39,26 +39,27 @@ All commands are preceded by sending the two magic bytes:
 
     0x87 0x83
 
-After that, send a single code byte to run the desired command.  For the most
+After that, send a single code byte to run the desired command. For the most
 part, the commands directly correspond to key presses on the instrument (see
 manual for details):
                             
-Code | Key               | Description
------|-------------------|------------------------------------
-0xfe | UNITS key         | Toggle units (lux/fc)
-0xfd | LIGHT/LOAD key    | Toggle backlight
-0x7f | RANGE/APO         | Toggle measurement ranges
-0xfb | REC/SETUP         | Save reading to memory
-0xbf | MAX/MIN/UP        | Toggle min/max/continuous mode
-0xf7 | PEAK/LEFT         | Toggle peak min/max mode
-0xde | REL/RIGHT         | Toggle rel mode
-0xef | HOLD/DOWN         | Toggle hold mode
-0xdb | LIGHT/LOAD (hold) | Toggle view mode for saved data
-0xdc | REC/SETUP (hold)  | Start/Stop data logging
-0xda | PEAK/LEFT (hold)  | Switch to previous display mode
-0xde | REL/RIGHT (hold)  | Switch to next display mode 
-0xf3 | POWER             | Power off
+Code   | Key               | Description
+-------|-------------------|------------------------------------
+0xfe   | UNITS key         | Toggle units (lux/fc)
+0xfd   | LIGHT/LOAD key    | Toggle backlight
+0x7f   | RANGE/APO         | Toggle measurement ranges
+0xfb   | REC/SETUP         | Save reading to memory
+0xbf   | MAX/MIN/UP        | Toggle min/max/continuous mode
+0xf7   | PEAK/LEFT         | Toggle peak min/max mode
+0xdf   | REL/RIGHT         | Toggle rel mode
+0xef   | HOLD/DOWN         | Toggle hold mode
+0xdb * | LIGHT/LOAD (hold) | Toggle view mode for saved data
+0xdc   | REC/SETUP (hold)  | Start/Stop data logging
+0xda   | PEAK/LEFT (hold)  | Switch to previous display mode
+0xde * | REL/RIGHT (hold)  | Switch to next display mode 
+0xf3   | POWER             | Power off
 
+Codes marked with an asterisk differ from the manufacturer's documentation.
 
 Commands not described in manufacturer's protocol documentation but found to do
 something by trial and error:
@@ -66,11 +67,16 @@ something by trial and error:
 Code | Key       | Description
 -----|-----------|------------------------------------
 0xfa | REC+UNITS | Enter/exit setup
-0xf9 | REC+RANGE | APO on
-0x7b | REC+RANGE | APO on
-0x7c | REC+RANGE | APO off
+0xf9 |           | APO on?
+0x7b |           | APO on?
+0x7c |           | APO off?
 0xee |           | memCL shows but memory is not cleared
 
+The APO commands do toggle the apo logo on the display but I am not at all
+confident that they actually change apo mode.
+
+`0xee` seemed to be the command for clearing logger memory but despite showing
+'memCL' on screen logger memory is unaffected.
 
 Commands that request data from the instrument cannot be triggered by button
 presses:
@@ -99,11 +105,9 @@ interpreted as two separate 4 bit nibbles which encode decimal digits (0-9).
 
 ### Live data
 
-Command: 0x11
+Command: `0x11`
 
-1 data record of 18 bytes.
-
-Record format:
+Returns a data record of 18 bytes:
 
 Byte | Size | Content  | Type  | Comment
 -----|------|----------|-------|-----------------------------------------
@@ -125,17 +129,18 @@ Byte | Size | Content  | Type  | Comment
 16   | 1    | mem_no   | bin   | number of saved data records
 17   | 1    | read_no  | bin   | manual storage cursor position
 
-In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
-`rawvalue` contains the absolute reading (that would be measured without *rel*
+In normal mode, `value` and `rawvalue` are identical. In `rel` mode however,
+`rawvalue` contains the absolute reading (that would be measured without `rel`
 mode) and `value` is the relative reading as displayed on the screen.
 
 `read_no` indicates where the cursor for viewing saved data is positioned. I.e.
-the memory register which you will see when switching to saved data viewing
-mode by pressing and holding `load`.
+the memory register which you will see on the display when switching to saved
+data viewing mode by pressing and holding `load`.
+
 
 ### Manually stored data
 
-Command: 0x12
+Command: `0x12`
 
 The instrument has 99 storage registers so we expect 99 data records of 13
 bytes, each.
@@ -143,7 +148,7 @@ bytes, each.
 Total blob length = 99x13 + 2 = 1289bytes.
 
 However, the instrument normally returns quite a few extra bytes.  The extra
-bytes are all 0x00.
+bytes are all `0x00`.
 
 
 Byte | Size | Content  | Type  | Comment
@@ -192,16 +197,19 @@ Range | Frange
 40k   | 10
 400k  | 100
 
-and Stat0_sign is the sign from the Stat0 byte.
+and `Stat0_sign` is the sign from the `Stat0` byte.
 
 The instrument does return all storage positions – even the ones that are
-unused.  Those have a value of 0x00 for the `pos` field and are ignored by this
+unused.  Those have a value of `0x00` for the `pos` field and are ignored by this
 program.
 
 
 ### Logger data
 
-Command: 0x13
+Command: `0x13`
+
+Returns a nested data structure comprising a header follwoed by one logging group
+records that contain logging data records.
 
 #### Header
 
@@ -235,14 +243,16 @@ Byte | Size |  Content  | Type  | Comment
 11   | 1    |  minute   | BCD   | minute
 12   | 1    |  second   | BCD   | second
 
-Followed by an unknown number of data-point records.  So we need to read until
-we hit the next magic number for a logging group or EOF.
+Followed by an unknown number of data records.  So we need to read until we hit
+the next magic number for a logging group or EOF.
 
-This is actually safe, as the magic number is larger than the largest possible 
-measurement and thus cannot be encountered by chance.
+This seems like a really bad idea, as we may run into the magic number by
+chance when a value is measured that happens to match the magic number.
+However, this is actually safe, as the magic number is larger than the largest
+possible measurement and thus cannot be encountered by chance.
 
 
-#### logging data point record
+#### logging data record
 
 Byte | Size  |  Content  | Type  | Comment
 ---- |-------|-----------|-------|------------------------
@@ -250,9 +260,10 @@ Byte | Size  |  Content  | Type  | Comment
 1    | 1     |  valL     | Uchar | value: lower 2 digits
 2    | 1     |  Stat0    | bin   | Stat0 byte
 
-See above (manually stored data) for interpretation of valH and valL.
-As no Stat1 byte is present, there is no `sign` value. It is unclear how
-negative readings (in rel mode) should be handled.
+See above (manually stored data) for interpretation of `valH` and `valL`.
+As no `Stat1` byte is present, there is no `sign` value. It is unclear how
+negative readings (in rel mode) should be handled. In fact, the instrument 
+simply disregards `rel` mode when logging and just stores absolute values.
 
 
 ## Status bytes
@@ -269,7 +280,7 @@ Bits  | Meaning | Values
 6     | Hold    | 0: cont, 1: hold
 5,4,3 | Mode    | 000:normal, 010:Pmin, 011:Pmax, 100:max, 101:min, 110:rel
 2     | units   | 0:lux, 1:fc
-0,1   | range   | 00:level0, 01:level1, 10:level2 ,11:level3
+1,0   | range   | 00:level0, 01:level1, 10:level2 ,11:level3
 
 
 range level | lux  | fc
@@ -291,12 +302,13 @@ Bits  | Meaning   | Values
 5     | power     | 0:ok, 1:low
 4     | sign      | 0:+, 1:-
 3,2   | view      | 00:time, 01:day, 10:sampling-interval, 11:year
-1,0   | memstat   | 01:store, 10:recall, 11: logging, 00: None
+1,0   | memstat   | 00: None, 01:store, 10:recall, 11: logging
 
 The sign must be multiplied with value, as the value data is always unsigned.
 
-`memstat` indicates if the instrument is in `store` or `recall` mode for saved
-data.  This is the modes you can enter long-pressing the `load` button or
-pressing `rec`, respectively.
-
+`memstat` indicates if the instrument is in `store`, `recall` or `logging`
+mode.  `store` is the mode you enter by saving a value by pressing `REC`,
+`recall` is the mode in which you view saved datae (long-pressing the `load`
+button) and `logging` indicates that the instrument actively logs data at the
+moment.
 

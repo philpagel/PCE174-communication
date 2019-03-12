@@ -14,8 +14,7 @@ from collections import OrderedDict
 import serial
 from construct import * # requires construct ≥ 2.8 (tested with 2.9)
 
-import pdb
-
+__version__ = 1.0
 __author__ = "Philipp Pagel"
 __copyright__ = "Copyright 2018, 2019, Philipp Pagel"
 __license__ = "MIT License"
@@ -145,7 +144,7 @@ def setvar(port, var, value):
                 'fc':   ('40k', '40', '400', '4k')
                 },
             'unit':     ('lux', 'fc'), 
-            'apo':      ('off', 'on'), 
+            'apo':      ('on', 'off'), 
             'view':     ('time', 'day', 'year', 'sampling')
             }
 
@@ -177,11 +176,13 @@ def setvar(port, var, value):
                 press_button(port, "peak", 2)
         elif var == "hold":
             press_button(port, "hold")
-        #elif var == "apo":  # XXX does this really work?
-        #    if value == "on":
-        #        send_cmd(port, 0x7b)
-        #    elif value == "off":
-        #        send_cmd(port, 0x7c)
+        # XXX This does not seem to work
+#        elif var == "apo":
+#            if value == "on":
+#                send_cmd(port, 0x7b)
+#            elif value == "off":
+#                send_cmd(port, 0x7c)
+#            return  # apo is automatically turned off by getting live data?!? So we cannot test for success
         elif var == "view":
             print(stat["view"], value)
             print ("dist:", pressdist(stat["view"], value, validvars["view"]))
@@ -421,7 +422,7 @@ def decode_stat0(byte):
 
     ret["unit"] = ("lux", "fc")[ret["unit"]]
     ret["range"] = Range[ret["unit"]][ret["range"]]
-    ret["apo"] = ("off", "on")[ret["apo"]]
+    ret["apo"] = ("on", "off")[ret["apo"]]
     ret["mode"] = mode[ret["mode"]]
     ret["hold"] = ("cont", "hold")[ret["hold"]]
     ret["Frange"] = Frange[ret["range"]]
@@ -890,6 +891,8 @@ Reading data from the instrument:
 Live logging - i.e. repeatedly reading live data:
 
     log
+
+See README.md for details
 """
     )
 

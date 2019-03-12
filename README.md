@@ -10,9 +10,9 @@ is quite a bit better than the PCE version, so try and find it online...
 See `protocol.md` for a detailed description of the communication protocol.
 
 
-## Status
+# Status
 
-Compared to v0.6, the command structure has changed and are no longer
+Compared to v0.6, the command structure has changed! Commands are no longer
 compatible with older releases. I believe it's much cleaner now, but that's
 *my* opinion.
 
@@ -28,19 +28,34 @@ All functionality that can be derived from the manufacturer protocol
 documentation has been implemented. It is possible, however, that there are
 undocumented functions.
 
-I have carried out some testing of all functions but not extensively, so I'm
-sure there still are relevant bugs. Therefore, this is not production ready but
-should be considered "beta".
+I have tested all commands ad they seem to do what I intended. However I did
+not systematically test invalid input. I also didn't implement any error
+handling so you will be presented with Python's error traceback when something
+goes wrong.
 
-Feedback/bug reports are welcome.
+Feedback and bug reports are welcome.
 
-Known issues:
 
-* Sending a `read` command will turn `APO` (auto power off) off. I.e. `get apo`
-  will allways return `off`. This ois probably, why `set apo {on|off}` does not
-  work.
-* Timing in tethered logging (`log`) is not accurate – in fact, all I did here
-  was to `sleep` for the number of seconds specified in `-I` between samples.  
+## Known issues
+
+Software issues
+
+* Mysteriously, the `up` and `down` commands do not seem to work in setup mode.
+  This implicates, that you cannot `set` `date`, `time` or `sampling`
+* The values for `apo` are often in disagreement with the apo icon on the display.
+  I have no idea what is going on, here. Any hints are welcome. I also found
+  command codes that toggle the apo icon (see protocol.md) but I do not trust
+  that they actually change apo mode. Therefore, the code for the `set apo {on|off}`
+  command is currently commented out.
+* Timing in tethered logging (`log`) is not accurate – in fact, all I did
+  was to `sleep` for the number of seconds specified in `-I` between samples.
+  I think that's good enough in most situations.
+* The instrument encodes many things in BCD. Some BCD values cannot be
+  represented exactly in binary representation. E.g. 110.3 turns into
+  110.30000000000001.
+
+Firmware/instrument issues
+
 * In standalone logging mode, the instrument does not honor `rel` mode but
   rather records absolute values. This is kind of inconsistent as the `rel`
   flag *is* recorded. However, tethered logging carried out by this program
@@ -52,11 +67,6 @@ Known issues:
 * The `weekday` recorded by the instrument does not necessarily match the
   recorded date: `weekday` is a number between 1 and 7 and can be set manually
   in setup. If you need the true weekday I recommend to compute it from `date`.
-* The instrument encodes many things in BCD. Some BCD values cannot be
-  represented exactly in binary representation. E.g. 110.3 turns into
-  110.30000000000001.
-* Mysteriously, the `up` and `down` commands do not seem to work in setup mode.
-  This implicates, that you cannot `set` `date`, `time` or `sampling`
 
 
 ## Credits
@@ -64,7 +74,7 @@ Known issues:
 Github user *FRISAK* tested this with an Extech HD450 and also contributed some
 changes to code and documentation.
 
-## Compatibility
+# Compatibility
 
 This program has been successfully tested with both a PCE-174 and Extech HD450
 light meter unter Linux.
@@ -74,7 +84,7 @@ MacOS as well.  However this is untested. Please let me know if you have tried
 this and I'll at least update this statement.
 
 
-## Connecting to a computer
+# Connecting to a computer
 
 The light meter has a mini USB port. Upon connection to the computer the
 instrument identifies as a CP2102 USB to UART bridge (device ID `10c4:ea60`). 
@@ -85,7 +95,11 @@ software CD that comes with the instrument). Mac anyone?
 
 Serial communication parameters are `9600bps8N1`.
 
-## Dependencies
+On Linux, you may need to configure your user account to have access to
+/dev/ttyUSB0 (or similar). Alternatively you can run using sudo.
+
+
+# Dependencies
 
 You need Python 3 for this to work.
 
@@ -108,7 +122,8 @@ It is also necessary to install pyserial, as follows:
 
     pip install pyserial
 
-## Usage
+
+# Usage
 
 To communicate with the light meter connect through USB and run the command
 like this:
@@ -138,7 +153,8 @@ like this:
                             from the instrument
       -s SEP, --sep SEP     separator for csv (default:',')
 
-    Available commands:
+
+## Command summary
 
     Simulating button presses on the instrument:
 
@@ -152,18 +168,22 @@ like this:
     Getting status/mode information:
 
         get status
-        get {date|time|unit|range|mode|apo|power|view|memstat|read_no}
+        get {date|weekday|time|unit|range|mode|apo|power|view|memstat|read_no}
 
     Setting modes:
 
         set mode {normal|rel|min|max|pmin|pmax}
-        set range {40|400|4k|40k|400k}
+        set range {400|4k|40k|400k}      # for lux
+        set range {40|400|4k|40k}        # for fc
         set unit {lux|fc}
         set apo {on|off}
-        set view {time|day|sampling|year}
+        set view {time|day|year|sampling}
+
+    Valid `range` values depend on the current value of `unit` and will change
+    magically, when the unit is changed. I.e. always set `unit` before `range`.
 
     Enter/exit setup mode
-    
+        
         setup
 
     Reading data from the instrument:
@@ -174,40 +194,11 @@ like this:
 
         log
 
-On Linux, you might need to configure your user account to have access to
-/dev/ttyUSB0. Alternatively you can run using sudo.
-
-The following list describes all commands that are available as of now. The
-command names were chosen to reflect what they do. Most of them correspond to
-key presses on the instrument. See *Button* entry for this information. For
+Below, all commands that are available as of now are described. The command
+names were chosen to reflect what they do. Most of them correspond to key
+presses on the instrument. See *Button* entry for this information. For
 conveniance, some commands are redundant in that they refer to the same button
-press but mean differnt things depending on context.
-
-
-## Usage as a module
-
-You can import this script as a module and call its functions directly. This
-may be handy if you want to write your own software that needs access to the
-instrument.
-
-Example session:
-
-    >>> import pce174 as p
-    >>> p.press_button("/dev/ttyUSB0", "light")
-    >>> dat = p.read_data("/dev/ttyUSB0", "live")
-    >>> dat
-    {'weekday': 1, 'date': '2019-03-11', 'value': 37.6, 'rawvalue': 37.6, 'memstat': None, 'read_no': 1, 'time': '21:43:50', 'hold': 'cont', 'mem_no': 11, 'unit': 'lux', 'view': 'time', 'range': '400', 'mode': 'normal', 'power': 'ok', 'apo': 'off'}
-    dat = p.read_data("/dev/ttyUSB0", "saved")
-    >>> p.getvar("/dev/ttyUSB0", "unit")
-    'lux'
-    >>> p.setvar("/dev/ttyUSB0", "unit", "fc")
-    >>> p.read_data("/dev/ttyUSB0", "live", outformat="csv")
-    '2019-03-11,1,21:47:38,3.5,3.5,fc,40,normal,cont,off,ok,time,None,11,1'
-    >>> dat2 = p.read_data("/dev/ttyUSB0", "saved")
-    >>> dat3 = p.read_data("/dev/ttyUSB0", "logger")
-
-See pydoc and/or source code for function documentation.
-
+press but mean different things depending on context.
 
 ## Simulate button presses
 
@@ -277,22 +268,26 @@ To set the desired view mode (what you see on the instrument display) use:
 
     set view {time|day|year|sampling}
 
-In theory, you can set turn `apo` on and of with
+In theory, you can turn `apo` on and off with
 
     set apo={on|off}
 
-However, this does not work, yet...
+However, this does not work, and I am confused about the apo state in general
+so I have commented out this part of the code, for now.
 
 
 ## Reading data from the instrument
 
-The program supports all three different types of data stored in the instrument:
+The program supports all three different types of data stored in the
+instrument:
 
-1. Live data (`read live`)– i.e. the current reading
-2. Saved data (`read saved`)– i.e. the content of the 99 storage registers that on can manually store readings in
-3. Logger data (`read logger`)– i.e. all stand-alone logging sessions
+1. Live data (`read live`) – i.e. the current reading
+2. Saved data (`read saved`) – i.e. the content of the 99 storage registers
+   that on can manually store readings in
+3. Logger data (`read logger`) – i.e. all stand-alone logging sessions
 
-In addition, you can perform tethered logging – i.e. the program polls the live data repeatedly (`log`).
+In addition, you can perform tethered logging – i.e. the program polls the live
+data repeatedly (`log`).
 
 ### read live
 
@@ -317,7 +312,7 @@ rawvalue  | raw numerical value
 unit      | Unit of measurement (lux/fc)
 range     | Measurement range used (40, 400, ... 4000k)
 mode      | normal/Pmin/Pmax/min/max/rel 
-hold      | Was hold active? (hold/cont)
+hold      | hold or continuous measurement? (hold/cont)
 apo       | Auto-power-off (on/off)
 power     | Power status (ok/low)
 dispmode  | Active display mode (time/day/sampling/year)
@@ -325,14 +320,14 @@ memstat   | storing/viewing of data (None/store/recall)
 mem_no    | Number of manually saved records in memory. (See `read saved`)
 read_no   | Manual storage cursor position (in the 99 storage registers)
 
-In normal mode, `value` and `rawvalue` are identical. In *rel* mode however,
-`rawvalue` contains the absolute reading (that would be measured without *rel*
+In normal mode, `value` and `rawvalue` are identical. In `rel` mode however,
+`rawvalue` contains the absolute reading (that would be measured without `rel`
 mode) and `value` is the relative reading as displayed on the screen.
 
 The binary data from the instrument includes a numeric `weekday` field in the
 data which has a few issues: `weekday` is manually set – i.e. the instrument
 does not try to ensure that the weekday entry matches the date. If you need the 
-weekday, don;t trust this data and compute it from the date.
+weekday, don't trust this data and compute it from the date.
 
 
 ### log
@@ -484,6 +479,31 @@ As the different data types have incompatible formats you must use the correct
 argument to `read`.
 
 
+# Usage as a module
+
+You can import this script as a module and call its functions directly. This
+may be handy if you want to write your own software that needs access to the
+instrument.
+
+Example session:
+
+    >>> import pce174 as p
+    >>> p.press_button("/dev/ttyUSB0", "light")
+    >>> dat = p.read_data("/dev/ttyUSB0", "live")
+    >>> dat
+    {'weekday': 1, 'date': '2019-03-11', 'value': 37.6, 'rawvalue': 37.6, 'memstat': None, 'read_no': 1, 'time': '21:43:50', 'hold': 'cont', 'mem_no': 11, 'unit': 'lux', 'view': 'time', 'range': '400', 'mode': 'normal', 'power': 'ok', 'apo': 'off'}
+    dat = p.read_data("/dev/ttyUSB0", "saved")
+    >>> p.getvar("/dev/ttyUSB0", "unit")
+    'lux'
+    >>> p.setvar("/dev/ttyUSB0", "unit", "fc")
+    >>> p.read_data("/dev/ttyUSB0", "live", outformat="csv")
+    '2019-03-11,1,21:47:38,3.5,3.5,fc,40,normal,cont,off,ok,time,None,11,1'
+    >>> dat2 = p.read_data("/dev/ttyUSB0", "saved")
+    >>> dat3 = p.read_data("/dev/ttyUSB0", "logger")
+
+See pydoc and/or source code for function documentation.
+
+
 # Some useful things from the manual
 
 Press `REC + UNITS` to enter setup.
@@ -496,7 +516,7 @@ resolution.  Normal min/max mode is much slower than that.
 
 Press `REC` to store current value in the next free position.
 
-Press `REC + LOAD` to clear the storage.
+Long-Press `REC + LOAD` to clear the storage.
 
 Press & hold `LOAD` to view stored values.
 
