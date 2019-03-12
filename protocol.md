@@ -157,7 +157,7 @@ Byte | Size | Content  | Type  | Comment
 2    | 13   |          |       | data record 1
 15   | 13   |          |       | data record 2
 18   | 13   |          |       | data record 3
-     |      |          |       |
+     |      | ...      |       |
      | 13   |          |       | data record n (n<100)
      | x    | 0x00     |       | trailing zero bytes
 
