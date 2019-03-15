@@ -194,15 +194,13 @@ like this:
 
         log
 
-Below, all commands that are available as of now are described. The command
-names were chosen to reflect what they do. Most of them correspond to key
-presses on the instrument. See *Button* entry for this information. For
-conveniance, some commands are redundant in that they refer to the same button
-press but mean different things depending on context.
+Below, all commands that are available as of now are described.
 
 ## Simulate button presses
 
-You can generate button press events over usb using the `press` command:
+For conveniance, some key press commands are redundant in that they refer to
+the same button by differnt names (as printed on the button).  You can generate
+button press events over usb using the `press` command:
     
     > pce174.py press rel
 
@@ -270,7 +268,7 @@ To set the desired view mode (what you see on the instrument display) use:
 
 In theory, you can turn `apo` on and off with
 
-    set apo={on|off}
+    set apo {on|off}
 
 However, this does not work, and I am confused about the apo state in general
 so I have commented out this part of the code, for now.
