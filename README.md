@@ -13,7 +13,7 @@ the PCE version, so try and find it online...
 The meter features 99 registers of manual storage memory plus stand alone
 logging capabilities. Data can be retrieved via a USB interface.
 
-See `protocol.md` for a detailed description of the communication protocol.
+See [`protocol.md`](protocol.md) for a detailed description of the communication protocol.
 
 
 # Status
