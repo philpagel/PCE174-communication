@@ -3,9 +3,15 @@
 This script implements the serial communication protocol used by the PCE-174
 logging light meter.
 
-The PCE-174 appears to be identical to/compatible with the Extech HD450 and
-HD400 light meters. The user manual for the Extech version of the instrument
-is quite a bit better than the PCE version, so try and find it online...
+The
+[PCE-174](https://www.pce-instruments.com/english/measuring-instruments/test-meters/lux-meter-pce-instruments-lux-meter-pce-174-det_60937.htm)
+appears to be identical to/compatible with the [Extech
+HD450](http://www.extech.com/display/?id=14484) and HD400 light meters. The
+user manual for the Extech version of the instrument is quite a bit better than
+the PCE version, so try and find it online...
+
+The meter features 99 registers of manual storage memory plus stand alone
+logging capabilities. Data can be retrieved via a USB interface.
 
 See `protocol.md` for a detailed description of the communication protocol.
 
