@@ -6,14 +6,63 @@ logging light meter.
 The
 [PCE-174](https://www.pce-instruments.com/english/measuring-instruments/test-meters/lux-meter-pce-instruments-lux-meter-pce-174-det_60937.htm)
 appears to be identical to/compatible with the [Extech
-HD450](http://www.extech.com/display/?id=14484) and HD400 light meters. The
-user manual for the Extech version of the instrument is quite a bit better than
-the PCE version, so try and find it online...
+HD450](http://www.extech.com/display/?id=14484) light meter. The user manual
+for the Extech version of the instrument is quite a bit better than the PCE
+version, so try and find it online...
 
 The meter features 99 registers of manual storage memory plus stand alone
 logging capabilities. Data can be retrieved via a USB interface.
 
-See [`protocol.md`](protocol.md) for a detailed description of the communication protocol.
+See [`protocol.md`](protocol.md) for a detailed description of the
+communication protocol as far as I could figure it out.
+
+# Usage in a nutshell
+
+Check instrument settings
+
+    > pce174.py get status
+    date:       2022-02-14
+    time:       15:55:40
+    unit:       lux
+    range:      400
+    mode:       normal
+    apo:        off
+    power:      ok
+    view:       time
+    memstat:    None
+    read_no:    1
+
+Get current reading from the meter
+
+    > pce174.py read live
+    date,weekday,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memstat,mem_no,read_no
+    2019-03-10,7,17:18:32,14.600000000000001,14.600000000000001,lux,400,normal,cont,off,ok,sampling,None,6,1
+
+Start live logging
+
+    > pce174.py log
+    date,weekday,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memstat,mem_no,read_no
+    2019-03-10,7,17:18:06,15.200000000000001,15.200000000000001,lux,400,rel,cont,off,ok,sampling,None,6,1
+    2019-03-10,7,17:18:07,18.3,18.3,lux,400,rel,cont,off,ok,sampling,None,6,1
+    2019-03-10,7,17:18:08,18.5,18.5,lux,400,rel,cont,off,ok,sampling,None,6,1
+    2019-03-10,7,17:18:10,18.5,18.5,lux,400,rel,cont,off,ok,sampling,None,6,1
+    [...]
+
+Read manually stored data
+
+    > pce174.py read saved
+    pos,date,weekday,time,value,unit,range,mode,hold,apo,power,view,memstat
+    1,2019-03-04,1,15:00:57,0.0,lux,4k,max,cont,off,ok,time,mem
+    2,2019-03-04,1,15:56:58,0.0,lux,400,normal,cont,off,ok,time,mem
+    [...]
+
+Read data from stand-alone logging session
+
+    > pce174.py read logger
+    groupno,id,date,weekday,time,value,unit,range,mode,hold,apo
+    1,0,2019-03-10,7,17:22:00,8.700000000000001,lux,400,normal,cont,off
+    1,1,2019-03-10,7,17:22:02,8.4,lux,400,normal,cont,off
+    [...]
 
 
 # Status
@@ -53,9 +102,10 @@ Software issues
   command codes that toggle the apo icon (see protocol.md) but I do not trust
   that they actually change apo mode. Therefore, the code for the `set apo {on|off}`
   command is currently commented out.
-* Timing in tethered logging (`log`) is not accurate – in fact, all I did
-  was to `sleep` for the number of seconds specified in `-I` between samples.
-  I think that's good enough in most situations.
+* Timing in tethered logging (`log`) is not accurate – in fact, all I did was
+  to `sleep` for the number of seconds specified in `-I` between samples.  The
+  timestamps, however are correct – it's just that the intervals are not
+  necessarily precise. I think that's good enough in most situations.
 * The instrument encodes many things in BCD. Some BCD values cannot be
   represented exactly in binary representation. E.g. 110.3 turns into
   110.30000000000001.
@@ -83,7 +133,7 @@ changes to code and documentation.
 # Compatibility
 
 This program has been successfully tested with both a PCE-174 and Extech HD450
-light meter unter Linux.
+light meter under Linux.
 
 The program was developed under Linux but it *should* work under Windows and
 MacOS as well.  However, this is untested. Please let me know if you have tried
@@ -102,7 +152,7 @@ software CD that comes with the instrument). Mac anyone?
 Serial communication parameters are `9600bps8N1`.
 
 On Linux, you may need to configure your user account to have access to
-/dev/ttyUSB0 (or similar). Alternatively you can run using sudo.
+/dev/ttyUSB0 (or similar). Alternatively you can run using `sudo`.
 
 
 # Dependencies
@@ -114,19 +164,11 @@ undergone major redesign during the switch to v2.8 that lead to loss of
 backwards compatibility. Accordingly, versions of `construct` <2.8 will not
 work!  Development and testing was carried out with v2.9.
 
-You can find the construct library and documentation here:
+Finally, you need `pyserial`. 
 
-https://github.com/construct/construct
+You can install all dependencies like
 
-https://construct.readthedocs.io/en/latest/
-
-If it is not provided by your distribution just install a local version:
-
-    pip install construct
-
-It is also necessary to install pyserial, as follows:
-
-    pip install pyserial
+    pip install -r requirements.txt
 
 
 # Usage
@@ -204,8 +246,8 @@ Below, all commands that are available as of now are described.
 
 ## Simulate button presses
 
-For conveniance, some key press commands are redundant in that they refer to
-the same button by differnt names (as printed on the button).  You can generate
+For convenience, some key press commands are redundant in that they refer to
+the same button by different names (as printed on the button).  You can generate
 button press events over usb using the `press` command:
     
     > pce174.py press rel
@@ -487,7 +529,7 @@ To enter or exit setup mode use
     
     pce174.py setup
 
-This is not all that usefull as I haven't figured out how to make the `up` and
+This is not all that useful as I haven't figured out how to make the `up` and
 `down` button press commands work in this mode. So you have to do the actual
 setup using the buttons on the instrument.
 
