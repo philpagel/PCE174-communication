@@ -6,9 +6,11 @@ logging light meter.
 The
 [PCE-174](https://www.pce-instruments.com/english/measuring-instruments/test-meters/lux-meter-pce-instruments-lux-meter-pce-174-det_60937.htm)
 appears to be identical to/compatible with the [Extech
-HD450](http://www.extech.com/display/?id=14484) light meter. The user manual
+HD450](https://www.flir.com/products/HD450/) light meter. The user manual
 for the Extech version of the instrument is quite a bit better than the PCE
 version, so try and find it online...
+
+Update 2023-02-19: The PCE-174 has been delisted by the manufacturer, that is why the link above no longer works. However, it is still available at some retailers.
 
 The meter features 99 registers of manual storage memory plus stand alone
 logging capabilities. Data can be retrieved via a USB interface.
@@ -379,11 +381,11 @@ weekday, better compute it from the date.
 
 This command calls `read live` repeatedly to do tethered live logging. By
 default it will log every second until interrupted. You can set the logging
-interval with the `-I` option and limit the number of readings with `-n`.
+interval with the `-i` / `--samplingint` option and limit the number of readings with `-n`.
 Negative values of `-n` / `--sampleno` mean that the program will keep logging
 until interrupted.
 
-    > pce174.py log
+    > pce174.py -i 1 -n 4 log
     date,weekday,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memstat,mem_no,read_no
     2019-03-10,7,17:18:06,15.200000000000001,15.200000000000001,lux,400,rel,cont,off,ok,sampling,None,6,1
     2019-03-10,7,17:18:07,18.3,18.3,lux,400,rel,cont,off,ok,sampling,None,6,1
