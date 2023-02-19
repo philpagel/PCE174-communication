@@ -396,6 +396,10 @@ As for `read live`, the first row contains the column headers in csv
 format. All other formats are simply written to `STDOUT` without any record
 separators.
 
+If you want to save the log output to a CSV file and watch the outputs on the console at the same time, you can use the `tee` program. This causes the output to be streamed to the CSV file as well as written to `STDOUT`:
+
+    > pce174.py -i 1 -f csv log | tee readings.csv
+
 
 ### read saved
 
@@ -577,9 +581,13 @@ Long-Press `REC + LOAD` to clear the storage.
 Press & hold `LOAD` to view stored values.
 
 
-## Data logger 
+## Data logger
 
-To start/stop logging press & hold `REC`.
+The PCE-174 and the HD450 can automatically record up to 16,000 readings in their internal memories.
 
-To clear logger memory, press `REC` + Power while the meter is off.
+To start logging press and hold the `REC` button until the `MEM` display icon begins blinking.
+
+To stop logging press and hold the `REC` button until the `MEM` icon disappears.
+
+To clear logger memory with the meter is off, press and hold the `REC` button and than switch it on with the `Power` button.
 
