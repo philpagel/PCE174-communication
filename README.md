@@ -589,5 +589,5 @@ To start logging press and hold the `REC` button until the `MEM` display icon be
 
 To stop logging press and hold the `REC` button until the `MEM` icon disappears.
 
-To clear logger memory with the meter is off, press and hold the `REC` button and than switch it on with the `Power` button.
+To clear logger memory, turn off the meter, then press and hold the `REC` button and switch it back on with the `Power` button.
 
