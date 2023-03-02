@@ -6,9 +6,11 @@ logging light meter.
 The
 [PCE-174](https://www.pce-instruments.com/english/measuring-instruments/test-meters/lux-meter-pce-instruments-lux-meter-pce-174-det_60937.htm)
 appears to be identical to/compatible with the [Extech
-HD450](http://www.extech.com/display/?id=14484) light meter. The user manual
+HD450](https://www.flir.com/products/HD450/) light meter. The user manual
 for the Extech version of the instrument is quite a bit better than the PCE
 version, so try and find it online...
+
+Update 2023-02-19: The PCE-174 has been delisted by the manufacturer, that is why the link above no longer works. However, it is still available at some retailers.
 
 The meter features 99 registers of manual storage memory plus stand alone
 logging capabilities. Data can be retrieved via a USB interface.
@@ -379,11 +381,11 @@ weekday, better compute it from the date.
 
 This command calls `read live` repeatedly to do tethered live logging. By
 default it will log every second until interrupted. You can set the logging
-interval with the `-I` option and limit the number of readings with `-n`.
+interval with the `-i` / `--samplingint` option and limit the number of readings with `-n`.
 Negative values of `-n` / `--sampleno` mean that the program will keep logging
 until interrupted.
 
-    > pce174.py log
+    > pce174.py -i 1 -n 4 log
     date,weekday,time,value,rawvalue,unit,range,mode,hold,apo,power,view,memstat,mem_no,read_no
     2019-03-10,7,17:18:06,15.200000000000001,15.200000000000001,lux,400,rel,cont,off,ok,sampling,None,6,1
     2019-03-10,7,17:18:07,18.3,18.3,lux,400,rel,cont,off,ok,sampling,None,6,1
@@ -393,6 +395,10 @@ until interrupted.
 As for `read live`, the first row contains the column headers in csv
 format. All other formats are simply written to `STDOUT` without any record
 separators.
+
+If you want to save the log output to a CSV file and watch the outputs on the console at the same time, you can use the `tee` program. This causes the output to be streamed to the CSV file as well as written to `STDOUT`:
+
+    > pce174.py -i 1 -f csv log | tee readings.csv
 
 
 ### read saved
@@ -575,9 +581,13 @@ Long-Press `REC + LOAD` to clear the storage.
 Press & hold `LOAD` to view stored values.
 
 
-## Data logger 
+## Data logger
 
-To start/stop logging press & hold `REC`.
+The PCE-174 and the HD450 can automatically record up to 16,000 readings in their internal memories.
 
-To clear logger memory, press `REC` + Power while the meter is off.
+To start logging press and hold the `REC` button until the `MEM` display icon begins blinking.
+
+To stop logging press and hold the `REC` button until the `MEM` icon disappears.
+
+To clear logger memory, turn off the meter, then press and hold the `REC` button and switch it back on with the `Power` button.
 
